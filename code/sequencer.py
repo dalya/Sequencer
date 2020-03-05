@@ -223,9 +223,9 @@ class Sequencer(object):
         self.sparse_distance_matrix_outpath = "%s/sparse_distance_matrix.pkl" % self.outpath
         self.final_products_outpath = "%s/final_products.pkl" % self.outpath
 
-        file_log = open(self.log_file_outpath, "a")
-        file_log.write("started the run\n")
-        file_log.flush()
+        self.file_log = open(self.log_file_outpath, "a")
+        self.file_log.write("started the run\n")
+        self.file_log.flush()
 
         ########################################################################################################
         ######### STEP 1: load or calculate distance matrices for different estimators and scales    ###########
@@ -957,109 +957,115 @@ class Sequencer(object):
         proximity_matrix = 1.0 / distance_matrix_copy
         return proximity_matrix
 
-#######################################################################################################################
-################################################ ALGORITHM FUNCTIONS ##################################################
-#######################################################################################################################
+    ################################################ ALGORITHM FUNCTIONS ##################################################
+    def _return_distance_matrix_dictionary_for_estimators_and_scales(self):
+        """Function calculates the distance matrices for each distance metric and scale. 
+        It uses the list of distance metrics and scales provided by the user. For each metric and scale, function divides 
+        the objects into chunks according to the scale, and estimates the distance between the chunks of objects.
+    
+        Returns
+        -------
+        :param distance_matrix_dictionary: dict(), a dictionary consisting of all the different distance matrices. The keys 
+            of the dictionary are tuples of (estimator_name, scale_value), where estimator_name is a given distance metric
+            and scale_value is a given scale. The values of the dictionary are lists consisting of the distance matrices 
+            for eahc of the chunks.
+        """
+        assert type(self.grid) == numpy.ndarray, "grid must be numpy.ndarray"
+        assert type(self.objects_list) == numpy.ndarray, "objects_list_normalised must be numpy.ndarray"
+        assert ((len(self.grid.shape) == 1) or (len(self.grid.shape) == 2)), "objects can be 1 or 2 dimensional"
+        assert (~numpy.isnan(self.grid)).all(), "grid cannot contain nan values"
+        assert (~numpy.isinf(self.grid)).all(), "grid cannot contain infinite values"
+        assert (~numpy.isneginf(self.grid)).all(), "grid cannot contain negative infinite values"
+        assert (~numpy.isnan(self.objects_list)).all(), "objects_list cannot contain nan values"
+        assert (~numpy.isinf(self.objects_list)).all(), "objects_list cannot contain infinite values"
+        assert (~numpy.isneginf(self.objects_list)).all(), "objects_list cannot contain negative infinite values"
+        if len(self.grid.shape) == 1:
+            assert (self.grid.shape[0] == self.objects_list.shape[1]), "the grid and the objects must have the same dimensions"
+        if len(self.grid.shape) == 2:
+            assert ((self.grid.shape[0] == self.objects_list.shape[1]) and (self.grid.shape[1] == self.objects_list.shape[2])), "the grid and the objects must have the same dimensions"
+        assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(self.scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
+        assert numpy.fromiter([estimator_value in ['EMD', 'energy', 'KL', 'L2'] for estimator_value in self.estimator_list], dtype=bool).all(), "estimators must be EMD, energy, KL or L2"
 
+        distance_matrix_dictionary = {}
+        for estimator_index, estimator_name in enumerate(self.estimator_list):
 
-def return_distance_matrix_dictionary_for_estimators_and_scales(grid, objects_list_normalised, scale_list, estimator_list, choice_parallelization, file_log=None, print_run=True):
-    """
-    Function calculates the distance matrices for the given scales and estimators.
+            scale_list_for_estimator = self.scale_list[estimator_index]
+            for scale_index, scale_value in enumerate(scale_list_for_estimator):
 
-    @grid: numpy.ndarray(), the grid onto which the objects are interpolated (the x-axis).
-    @objects_list_normalised: numpy.ndarray(), the list of the normalized objects.
-    @scale_list: a list of the scales to use per estimator, e.g. [[6, 8, 10, 12, 14], [1, 2, 4, 6, 8]]
-    @estimator_list: a list of estimators to use, e.g., ["EMD_brute_force", "KL"]
-    @file_log: a file object, optional. If a file object is given, the function will save running time of each distance matrix.
-    @print_run: boolean, whether to print progress or not, default is True.
-    """
-    assert type(grid) == numpy.ndarray, "grid must be numpy.ndarray"
-    assert type(objects_list_normalised) == numpy.ndarray, "objects_list_normalised must be numpy.ndarray"
-    assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be 1 or 2 dimensional"
-    assert (~numpy.isnan(grid)).all(), "grid cannot contain nan values"
-    assert (~numpy.isinf(grid)).all(), "grid cannot contain infinite values"
-    assert (~numpy.isneginf(grid)).all(), "grid cannot contain negative infinite values"
-    assert (~numpy.isnan(objects_list_normalised)).all(), "objects_list_normalised cannot contain nan values"
-    assert (~numpy.isinf(objects_list_normalised)).all(), "objects_list_normalised cannot contain infinite values"
-    assert (~numpy.isneginf(objects_list_normalised)).all(), "objects_list_normalised cannot contain negative infinite values"
-    if len(grid.shape) == 1:
-        assert (grid.shape[0] == objects_list_normalised.shape[1]), "the grid and the objects must have the same dimensions"
-    if len(grid.shape) == 2:
-        assert ((grid.shape[0] == objects_list_normalised.shape[1]) and (grid.shape[1] == objects_list_normalised.shape[2])), "the grid and the objects must have the same dimensions"
-    assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
-    assert numpy.fromiter([estimator_value in ['EMD_brute_force', 'energy', 'KL', 'L2'] for estimator_value in estimator_list], dtype=bool).all(), "estimators must be EMD_brute_force, energy, KL or L2"
+                # printing information and saving it into a log file
+                if self.to_print_progress:
+                    print("calculating the distance matrices for estimator: %s, scale: %s" % (estimator_name, scale_value))
+                if self.file_log != None:
+                    self.file_log.write("calculating the distance matrices for estimator: %s, scale: %s\n" % (estimator_name, scale_value))
+                    self.file_log.flush()
+                
+                start_time = time.time()
+                # divide the objects into chunks according to the scale
+                N_chunks = scale_value
+                grid_splitted, objects_list_splitted = self._divide_to_chunks(self.grid, numpy.copy(self.objects_list), N_chunks)
+                # construct the distance matrix list for this given scale
+                distance_matrix_list = []
+                for i in range(len(grid_splitted)):
+                    grid_of_chunk = grid_splitted[i]
+                    objects_list_of_chunk = objects_list_splitted[i]
+                    distance_matrix_of_chunk = self._return_distance_matrix(grid_of_chunk, objects_list_of_chunk, estimator_name, self.to_use_parallelization)
+                    distance_matrix_list.append(distance_matrix_of_chunk)
 
-    distance_matrix_dictionary = {}
-    for estimator_index, estimator_name in enumerate(estimator_list):
+                if self.to_print_progress: 
+                    print("finished calculating this distance matrix list, it took: %s seconds" % str(time.time() - start_time))
+                if self.file_log != None:
+                    self.file_log.write("finished calculating this distance matrix list, it took: %s seconds \n" % str(time.time() - start_time))
+                    self.file_log.flush()
 
-        scale_list_for_estimator = scale_list[estimator_index]
-        for scale_index, scale_value in enumerate(scale_list_for_estimator):
+                # add the list of matrices to the dictionary
+                distance_matrix_dictionary[(estimator_name, scale_value)] = distance_matrix_list
+        return distance_matrix_dictionary
 
-            # printing information and saving it into a log file
-            if print_run:
-                print("calculating the distance matrices for estimator: %s, scale: %s" % (estimator_name, scale_value))
-            if file_log != None:
-                file_log.write("calculating the distance matrices for estimator: %s, scale: %s\n" % (estimator_name, scale_value))
-                file_log.flush()
-            
-            start_time = time.time()
-            # divide the objects into chunks according to the scale
-            N_chunks = scale_value
-            grid_splitted, objects_list_splitted = divide_to_chunks(grid, numpy.copy(objects_list_normalised), N_chunks)
-            # construct the distance matrix list for this given scale
-            distance_matrix_list = []
-            for i in range(len(grid_splitted)):
-                grid_of_chunk = grid_splitted[i]
-                objects_list_of_chunk = objects_list_splitted[i]
-                distance_matrix_of_chunk = return_distance_matrix(grid_of_chunk, objects_list_of_chunk, estimator_name, choice_parallelization)
-                distance_matrix_list.append(distance_matrix_of_chunk)
+    def _return_weighted_distance_matrix_for_single_estimator_and_scale(self, distance_matrix_list, to_return_axis_ratio_list=True, to_return_sequence_list=True):
+        """Function calculates the weighted distance matrix for a single metric and scale. 
+        Function takes as an input a list of distance matrices, which correspond to the different chunks at a given scale.
+        Function orders the spectra according to each chunk and measures the axis ratio which serves as a weight of each sequence.
+        Function then performs a weighted average to return a single distance matrix, according to the axis ratio.
 
-            if print_run:    
-                print("finished calculating this distance matrix list, it took: %s seconds" % str(time.time() - start_time))
-            if file_log != None:
-                file_log.write("finished calculating this distance matrix list, it took: %s seconds \n" % str(time.time() - start_time))
-                file_log.flush()
+        Parameters
+        -------
+        :param distance_matrix_list: list of numpy.ndarray(), a list of distance matrices for each chunk.
+        :param to_return_axis_ratio_list: boolean (default=True), whether to return a list of axis ratios per chunk.
+        :param to_return_sequence_list: boolean (default=True), whether to return a list of the sequences per chunk.
 
-            # add the list of matrices to the dictionary
-            distance_matrix_dictionary[(estimator_name, scale_value)] = distance_matrix_list
-    return distance_matrix_dictionary
+        Returns
+        -------
+        :param weighted_distance_matrix: numpy.ndarray(), the weighted distance matrix over the different chunks
+        :param ordering_list (optional): list of lists, a list that contains the sequences for each different chunk
+        :param axis_ratio_list (optional): list of floats, a list that contains the axis ratios for each different chunk
+        """
+        assert type(distance_matrix_list) == list, "distance_matrix_list must be a list"
+        for distance_matrix in distance_matrix_list:
+            assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
+            assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
+            assert distance_matrix.shape[0] == distance_matrix.shape[1], "distance matrix must be NxN matrix"
+            assert (~numpy.isnan(distance_matrix)).all(), "distance matrix contains nan values"
+            assert (~numpy.isinf(distance_matrix)).all(), "distance matrix contains infinite values"
+            assert (~numpy.isneginf(distance_matrix)).all(), "distance matrix contains negative infinite values"
+            assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
+            assert (numpy.diagonal(distance_matrix) == 0).all(), "distance matrix must contain zero values in its diagonal"
 
-def return_weighted_distance_matrix_for_single_estimator_and_scale(distance_matrix_list, to_return_axis_ratio_list=True, to_return_sequence_list=True):
-    """
-    Function takes as an input a list of distance matrices, which correspond to the different chunks at a given scale.
-    Function orders the spectra according to each chunk and measures the axis ratio which serves as a weight of each sequence.
-    Function then performs a weighted average to return a single distance matrix, according to the axis ratio.
+        axis_ratio_list = []
+        ordering_list = []
+        for chunk_index in range(len(distance_matrix_list)):
+            distance_matrix_of_chunk = distance_matrix_list[chunk_index]
+            ordering_bfs, ordering_dfs, mst_axis_ratio, mst = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_of_chunk, return_axis_ratio=True, return_MST=True)
+            axis_ratio_list.append(mst_axis_ratio)
+            ordering_list.append(ordering_bfs)
+        axis_ratio_list = numpy.array(axis_ratio_list)
 
-    @distance_matrix_list: a list of distance matrices. Each distance matrix must be numpy.ndarray of NxN.
-    @to_return_weight_list: boolean, whether to return the weight (axis ratio) list.
-    """
-    assert type(distance_matrix_list) == list, "distance_matrix_list must be a list"
-    for distance_matrix in distance_matrix_list:
-        assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
-        assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
-        assert distance_matrix.shape[0] == distance_matrix.shape[1], "distance matrix must be NxN matrix"
-        assert (~numpy.isnan(distance_matrix)).all(), "distance matrix contains nan values"
-        assert (~numpy.isinf(distance_matrix)).all(), "distance matrix contains infinite values"
-        assert (~numpy.isneginf(distance_matrix)).all(), "distance matrix contains negative infinite values"
-        assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
-        assert (numpy.diagonal(distance_matrix) == 0).all(), "distance matrix must contain zero values in its diagonal"
-
-    axis_ratio_list = []
-    ordering_list = []
-    for chunk_index in range(len(distance_matrix_list)):
-        distance_matrix_of_chunk = distance_matrix_list[chunk_index]
-        ordering_bfs, ordering_dfs, mst_axis_ratio, mst = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_of_chunk, return_axis_ratio=True, return_MST=True)
-        axis_ratio_list.append(mst_axis_ratio)
-        ordering_list.append(ordering_bfs)
-    axis_ratio_list = numpy.array(axis_ratio_list)
-
-    # now take the weighted average to the list according to the weights you calculated
-    weighted_distance_matrix = numpy.average(distance_matrix_list, axis=0, weights=axis_ratio_list)
-    if to_return_axis_ratio_list and to_return_sequence_list:
-        return weighted_distance_matrix, ordering_list, axis_ratio_list
-    elif to_return_axis_ratio_list and not to_return_sequence_list:
-        return weighted_distance_matrix, sequence_list
-    else:
-        return weighted_distance_matrix
+        # now take the weighted average to the list according to the weights you calculated
+        weighted_distance_matrix = numpy.average(distance_matrix_list, axis=0, weights=axis_ratio_list)
+        if to_return_axis_ratio_list and to_return_sequence_list:
+            return weighted_distance_matrix, ordering_list, axis_ratio_list
+        elif to_return_axis_ratio_list and not to_return_sequence_list:
+            return weighted_distance_matrix, ordering_list
+        else:
+            return weighted_distance_matrix
 
 
