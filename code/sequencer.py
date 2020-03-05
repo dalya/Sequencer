@@ -2,34 +2,231 @@
 ####################################################### IMPORTS #######################################################
 #######################################################################################################################
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
-import numpy
-import glob
-#from emd import emd
-import time
-from astropy.io import fits
 import os
 import shutil
 import pickle
-import networkx as nx
 
-from scipy import sparse
-from scipy.sparse import csgraph
+import numpy
+import time
+import networkx as nx
 from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.stats import wasserstein_distance
 from scipy.stats import energy_distance
 from scipy.stats import entropy
-from scipy.sparse.csgraph import minimum_spanning_tree
-from scipy.stats import spearmanr, pearsonr
-from scipy.signal import medfilt
 from scipy.interpolate import interp1d
-
-# parallelization functions
 from joblib import Parallel, delayed, dump, load
 import multiprocessing
+
+import distance_metrics
+
+
+#######################################################################################################################
+##  Sequencer Class                                                                                                  ##
+#######################################################################################################################
+
+class Sequencer(object):
+    """An algorithm that detects one-dimensional trends (sequences) in complex datasets. To do so, To do so, it 
+    reorders objects within a set to produce the most elongated manifold describing their similarities which are 
+    measured in a multi-scale manner and using a collection of metrics. 
+
+    Parameters
+    ----------
+    :param grid: numpy.ndarray(), the x-axis of the objects in the sample. The grid should consist of float values
+                 and should not contain nan or infinite values. Since the data is assumed to be either 1D (vectors) 
+                 or 2D (matrices), the grid is assumed to be 1D or 2D as well.
+
+    :param objects_list: numpy.ndarray(), the list of the objects to sequence. The objects are
+                         assumed to be interpolated to a common grid and should not contain nan of infinite values.
+                         The data is assumed to be 1 or 2 dimensional, therefore the objects list should have 2 or 
+                         3 dimensions.
+
+    :param estimator_list: list of strings, a list of estimators to be used for the distance assignment. The current
+                           available estimators are: 'EMD', 'energy', 'KL', and 'L2'. 
+
+    :param scale_list: list of integers or None (default=None). A list of the scales to use for each estimator. The 
+                       length of the list is similar to the number of estimators given in the input. The scales must 
+                       be interger values that correspond to the number of parts the data is divided to. If the data 
+                       is one-dimensional, a single chunk value is given for each scale, e.g., scale_list=[[1,2,4], [1,2,4]] 
+                       if estimator_list=['EMD_brute_force', 'KL']. This means that the sequencer will divide each 
+                       object into 1 parts (full object), 2 parts (splitting each object into 2 parts), and 4 parts.
+                       If the data is two-dimensional, two chunk values are given of each scale, the first describes
+                       the horizontal direction and the seconds describes the vertical direction. For example, we will
+                       set: scale_list= [[(1,1), (1,2), (2,1)], [(1,1), (1,2), (2,1)]] if 
+                       estimator_list=['EMD_brute_force', 'KL']. The scales can be different for different estimators.
+
+                       if scale_list=None, then default list of scales is calculated using different powers of 2, such
+                       that the minimal length of a part is 20 pixels. For example, if the length of the objects is 100,
+                       then the default scales will be: 1, 2, 4. If the length of the objects is 1000, then the default
+                       scales will be: 1, 2, 4, 8, 16, 32. For 2D objects, the set of default scales is [1, 1].
+    """
+    def __init__(self, grid, objects_list, estimator_list, scale_list=None):
+        assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be one- or two-dimensional"
+        assert (~numpy.isnan(grid)).all(), "grid cannot contain nan values"
+        assert (~numpy.isinf(grid)).all(), "grid cannot contain infinite values"
+        assert (~numpy.isneginf(grid)).all(), "grid cannot contain negative infinite values"
+        assert ((len(objects_list.shape) == 2) or (len(objects_list.shape) == 3)), "objects can be one- or two-dimensional"
+        assert (~numpy.isnan(objects_list)).all(), "objects_list cannot contain nan values"
+        assert (~numpy.isinf(objects_list)).all(), "objects_list cannot contain infinite values"
+        assert (~numpy.isneginf(objects_list)).all(), "objects_list cannot contain negative infinite values"
+        if len(grid.shape) == 1:
+            assert (grid.shape[0] == objects_list.shape[1]), "the grid and the objects must have the same dimensions"
+        if len(grid.shape) == 2:
+            assert ((grid.shape[0] == objects_list.shape[1]) and (grid.shape[1] == objects_list.shape[2])), "the grid and the objects must have the same dimensions"
+
+        assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
+        assert numpy.fromiter([estimator_value in ['EMD_brute_force', 'energy', 'KL', 'L2'] for estimator_value in estimator_list], dtype=bool).all(), "estimators must be EMD_brute_force, energy, KL or L2"
+        assert len(scale_list) == len(estimator_list), "the length of scale_list must equal to the length of estimator_list"
+        for scale_value in scale_list:
+            scale_shape = numpy.array(scale_value).shape
+            assert len(grid.shape) == len(scale_shape), "the shape of scales must be similar to the shape of the data"
+            if len(grid.shape) == 1:
+                assert scale_shape[0] < grid.shape[0], "the scale must be smaller than the input data"
+            if len(grid.shape) == 2:
+                assert (scale_shape[0] < grid.shape[0]) and (scale_shape[1] < grid.shape[1]), "the scale must be smaller than the input data"
+
+        self.grid = grid
+        self.objects_list = objects_list
+        self.estimator_list = estimator_list
+        if scale_list != None:
+            self.scale_list = scale_list
+        else:
+            if len(grid.shape) == 1:
+                length_of_object = len(objects_list[0])
+                maximal_scale_size = length_of_object / 20.
+                scale_list_for_estimator = list(2**numpy.arange(0, numpy.log2(maximal_scale_size)))
+                scale_list = [scale_list_for_estimator] * len(self.estimator_list)
+                self.scale_list = scale_list
+
+            else: # len(grid.shape) == 2:
+                scale_list_for_estimator = [(1,1)]
+                scale_list = [scale_list_for_estimator] * len(self.estimator_list)
+                self.scale_list = scale_list
+
+
+    def execute(self, outpath, to_print_progress=True, to_calculate_distance_matrices=True, to_save_distance_matrices=True, \
+        distance_matrices_inpath=None, to_save_axis_ratios=True, to_average_N_best_estimators=False, number_of_best_estimators=None, \
+        to_use_parallelization=False):
+        """Main function of the sequencer that applies the algorithm to the data, and returns the best sequence and its axis ratio.
+        The function can save many intermediate products, such as the distance matrices for each estimator and scale. The user is 
+        encoraged to save these products, since they can be used later and reduce dramatically the computation time.
+
+        Parameters
+        ----------
+        :param outpath: string, the path of a directory to which the function will save intermediate products and log file.
+        :param to_print_progress: boolean, whether to print in the python shell the progress of the code. Default is True.
+        :param to_calculate_distance_matrices: boolean, whether to calculate the distance matrices. Default is True, and then the 
+            sequencer calculates the distance matrices (which can take a while). If the matrices were already calculated, 
+            one should set to_calculate_distance_matrices=False and provide the path of the distance matrices
+            using distance_matrices_inpath. 
+        :param to_save_distance_matrices: boolean, whether to save the distance matrices for future use of the sequencer. The distance
+            matrices are saved in a dictionary format which can later be used by the sequencer when setting 
+            to_calculate_distance_matrices = False and providing the code with the distance matrices path.
+    @distance_matrices_inpath: if to_calculate_distance_matrices == False, function loads the distance matrices from this path.
+            The code assumes that the distance matrices are saved in a dictionary format which is similar to the format
+            used by the sequencer to save them.
+    @to_save_axis_ratios: boolean, whether to save the derived axis ratios for each estimator and scale. Default is True.
+            These can be useful to map the important distance measures and scales of the problem.
+    @return_weighted_products: boolean, whether to return the weighted distance matrices and their axis ratios.
+    @to_average_N_best_estimators: boolean, whether to consider only N best estimators and scales when constructing the final sequence. 
+            Default is False, and the sequencer considers the information from all estimators and scales. 
+    @number_of_best_estimators: boolean, if to_average_N_best_estimators == True, function constructs the sequence
+            while considering only the best number_of_best_estimators (in terms of axis ratio) estimator-scale results.
+    @to_use_parallelization: boolean, whether to use parallelization when estimating the distance matrices. The parallelization
+            is built for the specific machine we used in our study and will not necessarily work on a different machine.
+            Default is False.
+        """
+
+
+
+def main_of_sequence_parallel(grid, objects_list, estimator_list, scale_list, outpath, to_print_progress=True, \
+         to_calculate_distance_matrices=True, to_save_distance_matrices=True, \
+         distance_matrices_inpath=None, to_save_axis_ratios=True, return_weighted_products=True, \
+         to_average_N_best_estimators=False, number_of_best_estimators=None, \
+         to_use_parallelization=False):
+    """
+    This is the main function of the sequencer. The function takes as an input the grid, objects_list, estimator_list,
+    and scale_list and calculates the weighted sequence according to these inputs.
+    
+    The input to the code:
+    @grid: numpy.ndarray(), the grid onto which the objects are interpolated. The grid should consists of float values
+           and should not contain nan and infinite values. The data is assumed to be 1 or 2 dimensional.
+
+    @objects_list: numpy.ndarray(), the list of object features to be considered for the sequencing. The objects are
+            assumed to be interpolated to a common grid and should not contain nan of infinite values.
+            The data is assumed to be 1 or 2 dimensional, therefore the objects list should have 2 or 3 dimensions.
+    @estimator_list: list, a list of the estimators to be used for the distance measurement.
+            The estimators can be: ['EMD_brute_force', 'energy', 'KL', 'L2']
+    @scale_list: list, a list of the scales to use for each estimator. The length of the list is similar to the 
+            number of estimators given in the input. The scales must be interger values that correspond to the number 
+            of chunks the data is divided to. If the data is one-dimensional, a single chunk value is given for each 
+            scale, e.g., scale_list=[[1,2,4], [1,2,4]] if estimator_list=['EMD_brute_force', 'KL']. If the data is 
+            two-dimensional, two chunk values are given of each scale, e.g., [[(1,1), (1,2), (2,1)], [(1,1), (1,2), (2,1)]]
+            if estimator_list=['EMD_brute_force', 'KL'].
+    @outpath: string, a directory path in which the output data and the log file will be saved.
+    @to_print_progress: boolean, whether to print in the python shell the progress of the code. Default is True.
+    @to_calculate_distance_matrices: boolean, whether to calculate the distance matrices. Default is True, and then the 
+            sequencer calculates the distance matrices (which can take a while). If the matrices were already calculated, 
+            one should set to_calculate_distance_matrices=False and provide the path of the distance matrices
+            using distance_matrices_inpath. 
+    @to_save_distance_matrices: boolean, whether to save the distance matrices for future use of the sequencer. The distance
+            matrices are saved in a dictionary format which can later be used by the sequencer when setting 
+            to_calculate_distance_matrices = False and providing the code with the distance matrices path.
+    @distance_matrices_inpath: if to_calculate_distance_matrices == False, function loads the distance matrices from this path.
+            The code assumes that the distance matrices are saved in a dictionary format which is similar to the format
+            used by the sequencer to save them.
+    @to_save_axis_ratios: boolean, whether to save the derived axis ratios for each estimator and scale. Default is True.
+            These can be useful to map the important distance measures and scales of the problem.
+    @return_weighted_products: boolean, whether to return the weighted distance matrices and their axis ratios.
+    @to_average_N_best_estimators: boolean, whether to consider only N best estimators and scales when constructing the final sequence. 
+            Default is False, and the sequencer considers the information from all estimators and scales. 
+    @number_of_best_estimators: boolean, if to_average_N_best_estimators == True, function constructs the sequence
+            while considering only the best number_of_best_estimators (in terms of axis ratio) estimator-scale results.
+    @to_use_parallelization: boolean, whether to use parallelization when estimating the distance matrices. The parallelization
+            is built for the specific machine we used in our study and will not necessarily work on a different machine.
+            Default is False.
+    """
+    grid = numpy.array(grid)
+    objects_list = numpy.array(objects_list)
+    N_obj = len(objects_list)
+
+    assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be one- or two-dimensional"
+    assert (~numpy.isnan(grid)).all(), "grid cannot contain nan values"
+    assert (~numpy.isinf(grid)).all(), "grid cannot contain infinite values"
+    assert (~numpy.isneginf(grid)).all(), "grid cannot contain negative infinite values"
+    assert ((len(objects_list.shape) == 2) or (len(objects_list.shape) == 3)), "objects can be one- or two-dimensional"
+    assert (~numpy.isnan(objects_list)).all(), "objects_list cannot contain nan values"
+    assert (~numpy.isinf(objects_list)).all(), "objects_list cannot contain infinite values"
+    assert (~numpy.isneginf(objects_list)).all(), "objects_list cannot contain negative infinite values"
+    if len(grid.shape) == 1:
+        assert (grid.shape[0] == objects_list.shape[1]), "the grid and the objects must have the same dimensions"
+    if len(grid.shape) == 2:
+        assert ((grid.shape[0] == objects_list.shape[1]) and (grid.shape[1] == objects_list.shape[2])), "the grid and the objects must have the same dimensions"
+
+    assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
+    assert numpy.fromiter([estimator_value in ['EMD_brute_force', 'energy', 'KL', 'L2'] for estimator_value in estimator_list], dtype=bool).all(), "estimators must be EMD_brute_force, energy, KL or L2"
+    assert len(scale_list) == len(estimator_list), "the length of scale_list must equal to the length of estimator_list"
+    for scale_value in scale_list:
+        scale_shape = numpy.array(scale_value).shape
+        assert len(grid.shape) == len(scale_shape), "the shape of scales must be similar to the shape of the data"
+        if len(grid.shape) == 1:
+            assert scale_shape[0] < grid.shape[0], "the scale must be smaller than the input data"
+        if len(grid.shape) == 2:
+            assert (scale_shape[0] < grid.shape[0]) and (scale_shape[1] < grid.shape[1]), "the scale must be smaller than the input data"
+
+    assert type(outpath) == str, "output path should be string"
+    assert os.path.isdir(outpath), "output path should be a directory"
+
+    if to_calculate_distance_matrices == True: 
+        assert distance_matrices_inpath == None, "if to_calculate_distance_matrices=True, distance_matrices_inpath must be None"
+    if distance_matrices_inpath != None:
+        assert (to_calculate_distance_matrices == False), "if to_calculate_distance_matrices is not None, to_calculate_distance_matrices must be False"
+        assert type(distance_matrices_inpath) == str, "distance_matrices_inpath path should be string"
+    
+    if to_average_N_best_estimators == False: 
+        assert number_of_best_estimators == None, "if to_average_N_best_estimators=False, number_of_best_estimators must be None"
+    if to_average_N_best_estimators == True:
+        assert isinstance(number_of_best_estimators, int), "if to_average_N_best_estimators=True, number_of_best_estimators must be an integer"
 
 
 #######################################################################################################################
