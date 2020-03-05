@@ -20,7 +20,6 @@ import multiprocessing
 
 import distance_metrics
 
-
 #######################################################################################################################
 ##  Sequencer Class                                                                                                  ##
 #######################################################################################################################
@@ -48,12 +47,12 @@ class Sequencer(object):
                        length of the list is similar to the number of estimators given in the input. The scales must 
                        be interger values that correspond to the number of parts the data is divided to. If the data 
                        is one-dimensional, a single chunk value is given for each scale, e.g., scale_list=[[1,2,4], [1,2,4]] 
-                       if estimator_list=['EMD_brute_force', 'KL']. This means that the sequencer will divide each 
+                       if estimator_list=['EMD', 'KL']. This means that the sequencer will divide each 
                        object into 1 parts (full object), 2 parts (splitting each object into 2 parts), and 4 parts.
                        If the data is two-dimensional, two chunk values are given of each scale, the first describes
                        the horizontal direction and the seconds describes the vertical direction. For example, we will
                        set: scale_list= [[(1,1), (1,2), (2,1)], [(1,1), (1,2), (2,1)]] if 
-                       estimator_list=['EMD_brute_force', 'KL']. The scales can be different for different estimators.
+                       estimator_list=['EMD', 'KL']. The scales can be different for different estimators.
 
                        if scale_list=None, then default list of scales is calculated using different powers of 2, such
                        that the minimal length of a part is 20 pixels. For example, if the length of the objects is 100,
@@ -74,16 +73,18 @@ class Sequencer(object):
         if len(grid.shape) == 2:
             assert ((grid.shape[0] == objects_list.shape[1]) and (grid.shape[1] == objects_list.shape[2])), "the grid and the objects must have the same dimensions"
 
-        assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
-        assert numpy.fromiter([estimator_value in ['EMD_brute_force', 'energy', 'KL', 'L2'] for estimator_value in estimator_list], dtype=bool).all(), "estimators must be EMD_brute_force, energy, KL or L2"
-        assert len(scale_list) == len(estimator_list), "the length of scale_list must equal to the length of estimator_list"
-        for scale_value in scale_list:
-            scale_shape = numpy.array(scale_value).shape
-            assert len(grid.shape) == len(scale_shape), "the shape of scales must be similar to the shape of the data"
-            if len(grid.shape) == 1:
-                assert scale_shape[0] < grid.shape[0], "the scale must be smaller than the input data"
-            if len(grid.shape) == 2:
-                assert (scale_shape[0] < grid.shape[0]) and (scale_shape[1] < grid.shape[1]), "the scale must be smaller than the input data"
+        if scale_list != None:
+            assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
+        assert numpy.fromiter([estimator_value in ['EMD', 'energy', 'KL', 'L2'] for estimator_value in estimator_list], dtype=bool).all(), "estimators must be EMD, energy, KL or L2"
+        if scale_list != None:
+            assert len(scale_list) == len(estimator_list), "the length of scale_list must equal to the length of estimator_list"
+            for scale_value in scale_list:
+                scale_shape = numpy.array(scale_value).shape
+                assert len(grid.shape) == len(scale_shape), "the shape of scales must be similar to the shape of the data"
+                if len(grid.shape) == 1:
+                    assert scale_shape[0] < grid.shape[0], "the scale must be smaller than the input data"
+                if len(grid.shape) == 2:
+                    assert (scale_shape[0] < grid.shape[0]) and (scale_shape[1] < grid.shape[1]), "the scale must be smaller than the input data"
 
         self.grid = grid
         self.objects_list = objects_list
@@ -93,9 +94,13 @@ class Sequencer(object):
         else:
             if len(grid.shape) == 1:
                 length_of_object = len(objects_list[0])
-                maximal_scale_size = length_of_object / 20.
-                scale_list_for_estimator = list(2**numpy.arange(0, numpy.log2(maximal_scale_size)))
+                if length_of_object > 20:
+                    maximal_scale_size = length_of_object / 20.
+                    scale_list_for_estimator = list(2**numpy.arange(0, numpy.log2(maximal_scale_size)))
+                else:
+                    scale_list_for_estimator = [1]
                 scale_list = [scale_list_for_estimator] * len(self.estimator_list)
+
                 self.scale_list = scale_list
 
             else: # len(grid.shape) == 2:
@@ -171,14 +176,14 @@ class Sequencer(object):
             assert ((self.grid.shape[0] == self.objects_list.shape[1]) and (self.grid.shape[1] == self.objects_list.shape[2])), "the grid and the objects must have the same dimensions"
 
         assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(self.scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
-        assert numpy.fromiter([estimator_value in ['EMD_brute_force', 'energy', 'KL', 'L2'] for estimator_value in self.estimator_list], dtype=bool).all(), "estimators must be EMD_brute_force, energy, KL or L2"
+        assert numpy.fromiter([estimator_value in ['EMD', 'energy', 'KL', 'L2'] for estimator_value in self.estimator_list], dtype=bool).all(), "estimators must be EMD, energy, KL or L2"
         assert len(self.scale_list) == len(self.estimator_list), "the length of scale_list must equal to the length of estimator_list"
         for scale_value in self.scale_list:
             scale_shape = numpy.array(scale_value).shape
             assert len(self.grid.shape) == len(scale_shape), "the shape of scales must be similar to the shape of the data"
             if len(self.grid.shape) == 1:
                 assert scale_shape[0] < self.grid.shape[0], "the scale must be smaller than the input data"
-            if len(grid.shape) == 2:
+            if len(self.grid.shape) == 2:
                 assert (scale_shape[0] < self.grid.shape[0]) and (scale_shape[1] < self.grid.shape[1]), "the scale must be smaller than the input data"
 
         assert type(outpath) == str, "outpath should be string"
@@ -281,7 +286,7 @@ class Sequencer(object):
             if self.to_print_progress:
                 print("dumped the axis ratios to the file: %s" % self.axis_ratios_outpath)
 
-        distance_matrix_all /= numpy.sum(weights_all_bfs)
+        distance_matrix_all /= numpy.sum(weight_list)
         numpy.fill_diagonal(distance_matrix_all, 0) 
         f_distance = open(self.weighted_distance_matrix_outpath, "wb")
         pickle.dump(distance_matrix_all, f_distance)
@@ -700,7 +705,7 @@ class Sequencer(object):
         graph_half_length = numpy.average(distance_arr) 
         g_unique, counts = numpy.unique(distance_arr, return_counts=True)
         graph_half_width = numpy.average(counts) / 2.
-        mst_axis_ratio = float(graph_half_length) / float(graph_half_width)
+        mst_axis_ratio = float(graph_half_length) / float(graph_half_width) + 1 
 
         return mst_axis_ratio
 
@@ -1008,7 +1013,7 @@ class Sequencer(object):
                 for i in range(len(grid_splitted)):
                     grid_of_chunk = grid_splitted[i]
                     objects_list_of_chunk = objects_list_splitted[i]
-                    distance_matrix_of_chunk = self._return_distance_matrix(grid_of_chunk, objects_list_of_chunk, estimator_name, self.to_use_parallelization)
+                    distance_matrix_of_chunk = self._return_distance_matrix(grid_of_chunk, objects_list_of_chunk, estimator_name)
                     distance_matrix_list.append(distance_matrix_of_chunk)
 
                 if self.to_print_progress: 
