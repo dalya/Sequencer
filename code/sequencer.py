@@ -805,131 +805,157 @@ class Sequencer(object):
         else:
             return ordering_bfs, ordering_dfs
 
-#######################################################################################################################
-######################################## PROXIMIY/DISTANCE matrix conversion ##########################################
-#######################################################################################################################
 
-def return_proximity_matrix_populated_by_MSTs_avg_prox(MST_list, weight_list, to_average_N_best_estimators=False, number_of_best_estimators=None):
-    """
-    Function populates all the given minimum spanning trees into a proximity matrix.
-    Function weights the different edges based on the weight list which is also given.
-    Cells in the matrix that do not correspond to any edge will be filled with zero (no proximity).
-    Cells in the diagonal of the matrix will be filled with numpy.inf (infinite proximity).
+    ######################################## PROXIMIY/DISTANCE matrix conversion ##########################################
+    def _return_proximity_matrix_populated_by_MSTs_avg_prox(self, MST_list, weight_list):
+        """Function populates the MSTs from the input list into a proximty matrix, where each MST is weighted according 
+        to the appropriate weight from the weight list. The population is done by inserting the edges in an MST into 
+        the relevant cells in the proximity matrix, weighted by the appropriate weight.
+        (*) Cells in the matrix that do not correspond to any edge will be filled with zero (no proximity).
+        (*) Cells in the diagonal of the matrix will be filled with numpy.inf (infinite proximity).
 
-    @MST_list: a list that contains all the MST objects, each of the objects is a networkx.classes.graph.Graph.
-    @weight_list: a weight list that represents the relative importance of each MST. should be positive values.
-    """
-    assert type(MST_list) == list, "MST_list should be a list"
-    assert (numpy.array(weight_list) >= 0).all(), "weights in weight_list should be non-negative"
-    assert numpy.fromiter([type(mst) == nx.classes.graph.Graph for mst in MST_list], dtype=bool).all(), "MST_list should contain networkx.classes.graph.Graph objects"
+        Parameters
+        -------
+        :param MST_list: list of networkx.classes.graph.Graph(), a list of the MSTs to be populated into the proximity matrix.
+        :param weight_list: list of floats, a list of the weights of each of the MST when populated into the proximity matrix.
+            In practice, the weights are defined as the axis ratios of each of the MSTs.
 
-    # start by taking only the best estimators, if specified
-    if to_average_N_best_estimators:
-        indices = numpy.argsort(weight_list)[::-1][:number_of_best_estimators]
-        weight_list_new = []
-        MST_list_new = []
-        for index_good in indices:
-            weight_list_new.append(weight_list[index_good])
-            MST_list_new.append(MST_list[index_good])
+        Returns
+        -------
+        :param proximity_matrix: numpy.ndarray(), the proximity matrix, populated by the different MSTs.
+        """
+        assert type(MST_list) == list, "MST_list should be a list"
+        assert (numpy.array(weight_list) >= 0).all(), "weights in weight_list should be non-negative"
+        assert numpy.fromiter([type(mst) == nx.classes.graph.Graph for mst in MST_list], dtype=bool).all(), "MST_list should contain networkx.classes.graph.Graph objects"
 
-        weight_list = list(weight_list_new)
-        MST_list = list(MST_list_new)
+        # take only the N best estimators, if required:
+        if self.to_average_N_best_estimators:
+            indices = numpy.argsort(weight_list)[::-1][:self.number_of_best_estimators]
+            weight_list_new = []
+            MST_list_new = []
+            for index_good in indices:
+                weight_list_new.append(weight_list[index_good])
+                MST_list_new.append(MST_list[index_good])
 
-    N = MST_list[0].number_of_nodes()
-    sum_of_weights = numpy.sum(weight_list)
-    proximity_matrix = numpy.zeros((N, N))
+            weight_list = list(weight_list_new)
+            MST_list = list(MST_list_new)
 
-    for mst_index, mst in enumerate(MST_list):
-        weight_of_mst = weight_list[mst_index]
-        # go over all the edges and populate, this should be symmetric
-        for edge in mst.edges():
-            node1 = edge[0]
-            node2 = edge[1]
-            distance = mst[node1][node2]['weight']
-            proximity_matrix[node1, node2] += (weight_of_mst * (1.0 / distance))
-            proximity_matrix[node2, node1] += (weight_of_mst * (1.0 / distance))
-    proximity_matrix /= sum_of_weights
-    numpy.fill_diagonal(proximity_matrix, numpy.inf)
-    return proximity_matrix
+        N = MST_list[0].number_of_nodes()
+        sum_of_weights = numpy.sum(weight_list)
+        proximity_matrix = numpy.zeros((N, N))
 
-def return_proximity_matrix_populated_by_MSTs_avg_dist(MST_list, weight_list, to_average_N_best_estimators=False, number_of_best_estimators=None):
-    """
-    Function populates all the given minimum spanning trees into a proximity matrix.
-    Function weights the different edges based on the weight list which is also given.
-    Cells in the matrix that do not correspond to any edge will be filled with zero (no proximity).
-    Cells in the diagonal of the matrix will be filled with numpy.inf (infinite proximity).
+        for mst_index, mst in enumerate(MST_list):
+            weight_of_mst = weight_list[mst_index]
+            # go over all the edges and populate, this should be symmetric
+            for edge in mst.edges():
+                node1 = edge[0]
+                node2 = edge[1]
+                distance = mst[node1][node2]['weight']
+                proximity_matrix[node1, node2] += (weight_of_mst * (1.0 / distance))
+                proximity_matrix[node2, node1] += (weight_of_mst * (1.0 / distance))
+        proximity_matrix /= sum_of_weights
+        numpy.fill_diagonal(proximity_matrix, numpy.inf)
+        return proximity_matrix
 
-    @MST_list: a list that contains all the MST objects, each of the objects is a networkx.classes.graph.Graph.
-    @weight_list: a weight list that represents the relative importance of each MST. should be positive values.
-    """
-    assert type(MST_list) == list, "MST_list should be a list"
-    assert (numpy.array(weight_list) >= 0).all(), "weights in weight_list should be non-negative"
-    assert numpy.fromiter([type(mst) == nx.classes.graph.Graph for mst in MST_list], dtype=bool).all(), "MST_list should contain networkx.classes.graph.Graph objects"
+    def _return_proximity_matrix_populated_by_MSTs_avg_dist(self, MST_list, weight_list):
+        """Function populates the MSTs from the input list into a proximty matrix, where each MST is weighted according 
+        to the appropriate weight from the weight list. The population is done by inserting the edges in an MST into 
+        the relevant cells in the distance matrix (the inverse of the proximity matrix), weighted by the appropriate weight.
+        (*) Cells in the matrix that do not correspond to any edge will be filled with zero (no proximity).
+        (*) Cells in the diagonal of the matrix will be filled with numpy.inf (infinite proximity).
 
-    # start by taking only the best estimators, if specified
-    if to_average_N_best_estimators:
-        indices = numpy.argsort(weight_list)[::-1][:number_of_best_estimators]
-        weight_list_new = []
-        MST_list_new = []
-        for index_good in indices:
-            weight_list_new.append(weight_list[index_good])
-            MST_list_new.append(MST_list[index_good])
+        Parameters
+        -------
+        :param MST_list: list of networkx.classes.graph.Graph(), a list of the MSTs to be populated into the proximity matrix.
+        :param weight_list: list of floats, a list of the weights of each of the MST when populated into the proximity matrix.
+            In practice, the weights are defined as the axis ratios of each of the MSTs.
 
-        weight_list = list(weight_list_new)
-        MST_list = list(MST_list_new)
+        Returns
+        -------
+        :param proximity_matrix: numpy.ndarray(), the proximity matrix, populated by the different MSTs.
+        """
+        assert type(MST_list) == list, "MST_list should be a list"
+        assert (numpy.array(weight_list) >= 0).all(), "weights in weight_list should be non-negative"
+        assert numpy.fromiter([type(mst) == nx.classes.graph.Graph for mst in MST_list], dtype=bool).all(), "MST_list should contain networkx.classes.graph.Graph objects"
 
-    N = MST_list[0].number_of_nodes()
-    sum_of_weights = numpy.sum(weight_list)
-    distance_matrix = numpy.zeros((N, N))
+        # take only the N best estimators, if required:
+        if self._to_average_N_best_estimators:
+            indices = numpy.argsort(weight_list)[::-1][:self.number_of_best_estimators]
+            weight_list_new = []
+            MST_list_new = []
+            for index_good in indices:
+                weight_list_new.append(weight_list[index_good])
+                MST_list_new.append(MST_list[index_good])
 
-    for mst_index, mst in enumerate(MST_list):
-        weight_of_mst = weight_list[mst_index]
-        # go over all the edges and populate, this should be symmetric
-        for edge in mst.edges():
-            node1 = edge[0]
-            node2 = edge[1]
-            distance = mst[node1][node2]['weight']
-            distance_matrix[node1, node2] += (weight_of_mst * distance)
-            distance_matrix[node2, node1] += (weight_of_mst * distance)
+            weight_list = list(weight_list_new)
+            MST_list = list(MST_list_new)
 
-    # now convert the distance matrix into a proximity matrix
-    proximity_matrix = convert_distance_to_proximity_matrix(distance_matrix)
-    return proximity_matrix
+        N = MST_list[0].number_of_nodes()
+        sum_of_weights = numpy.sum(weight_list)
+        distance_matrix = numpy.zeros((N, N))
+
+        for mst_index, mst in enumerate(MST_list):
+            weight_of_mst = weight_list[mst_index]
+            # go over all the edges and populate, this should be symmetric
+            for edge in mst.edges():
+                node1 = edge[0]
+                node2 = edge[1]
+                distance = mst[node1][node2]['weight']
+                distance_matrix[node1, node2] += (weight_of_mst * distance)
+                distance_matrix[node2, node1] += (weight_of_mst * distance)
+
+        # now convert the distance matrix into a proximity matrix
+        proximity_matrix = self._convert_distance_to_proximity_matrix(distance_matrix)
+        return proximity_matrix
 
 
-def convert_proximity_to_distance_matrix(proximity_matrix):
-    """
-    Function converts the given proximity matrix to a distance matrix and returns it.
+    def _convert_proximity_to_distance_matrix(self, proximity_matrix):
+        """Function converts the given proximity matrix into a distance matrix and returns it.
 
-    @proximity_matrix: a 2d numpy.array(), a matrix that represents the proximities between the objects.
-    """
-    assert type(proximity_matrix) == numpy.ndarray, "proximity matrix must be numpy.ndarray"
-    assert len(proximity_matrix.shape) == 2, "proximity matrix must have 2 dimensions"
-    assert proximity_matrix.shape[0] == proximity_matrix.shape[1], "proximity matrix must be NxN matrix"
-    assert (~numpy.isnan(proximity_matrix)).all(), "proximity matrix contains nan values"
-    assert (~numpy.isneginf(proximity_matrix)).all(), "proximity matrix contains negative infinite values"
-    assert (proximity_matrix >= 0).all(), "proximity matrix contains negative values"
+        Parameters
+        -------
+        :param proximity_matrix: numpy.ndarray(), a matrix describing the proximity between the different objects
 
-    numpy.fill_diagonal(proximity_matrix, numpy.inf)
-    distance_matrix = 1.0 / proximity_matrix
-    return distance_matrix
+        Returns
+        -------
+        :param distance_matrix: numpy.ndarray(), a matrix describing the distance between the different objects. 
+            It contains values which are the inverse of the proximity values.
+        """
+        assert type(proximity_matrix) == numpy.ndarray, "proximity matrix must be numpy.ndarray"
+        assert len(proximity_matrix.shape) == 2, "proximity matrix must have 2 dimensions"
+        assert proximity_matrix.shape[0] == proximity_matrix.shape[1], "proximity matrix must be NxN matrix"
+        assert (~numpy.isnan(proximity_matrix)).all(), "proximity matrix contains nan values"
+        assert (~numpy.isneginf(proximity_matrix)).all(), "proximity matrix contains negative infinite values"
+        assert (proximity_matrix >= 0).all(), "proximity matrix contains negative values"
 
-def convert_distance_to_proximity_matrix(distance_matrix):
-    """
-    Function converts the given distance matrix to a proximity matrix and returns it.
+        proximity_matrix_copy = numpy.copy(proximity_matrix)
+        numpy.fill_diagonal(proximity_matrix_copy, numpy.inf)
+        distance_matrix = 1.0 / proximity_matrix_copy
+        return distance_matrix
 
-    @distance_matrix: a 2d numpy.array(), a matrix that represents the distances between the objects.
-    """
-    assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
-    assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
-    assert distance_matrix.shape[0] == distance_matrix.shape[1], "distance matrix must be NxN matrix"
-    assert (~numpy.isnan(distance_matrix)).all(), "distance matrix contains nan values"
-    assert (~numpy.isneginf(distance_matrix)).all(), "distance matrix contains negative infinite values"
-    assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
+    def _convert_distance_to_proximity_matrix(self, distance_matrix):
+        """Function converts the given distance matrix into a proximity matrix and returns it.
 
-    numpy.fill_diagonal(distance_matrix, 0)
-    proximity_matrix = 1.0 / distance_matrix
-    return proximity_matrix
+        Parameters
+        -------
+        :param distance_matrix: numpy.ndarray(), a matrix describing the distances between the different objects.
+
+        Returns
+        -------
+        :param proximity_matrix: numpy.ndarray(), a matrix describing the proximity between the different objects. 
+            It contains values which are the inverse of the distance values.
+        """
+        assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
+        assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
+        assert distance_matrix.shape[0] == distance_matrix.shape[1], "distance matrix must be NxN matrix"
+        assert (~numpy.isnan(distance_matrix)).all(), "distance matrix contains nan values"
+        assert (~numpy.isneginf(distance_matrix)).all(), "distance matrix contains negative infinite values"
+        assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
+
+        distance_matrix_copy = numpy.copy(distance_matrix)
+        numpy.fill_diagonal(distance_matrix_copy, 0)
+        proximity_matrix = 1.0 / distance_matrix_copy
+        return proximity_matrix
 
 #######################################################################################################################
 ################################################ ALGORITHM FUNCTIONS ##################################################
