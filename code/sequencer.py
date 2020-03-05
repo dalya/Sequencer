@@ -41,8 +41,8 @@ class Sequencer(object):
                          The data is assumed to be 1 or 2 dimensional, therefore the objects list should have 2 or 
                          3 dimensions.
 
-    :param estimator_list: list of strings, a list of estimators to be used for the distance assignment. The current
-                           available estimators are: 'EMD', 'energy', 'KL', and 'L2'. 
+    :param estimator_list: list of strings (default=['EMD', 'energy', 'KL', 'L2']) , a list of estimators to be used f
+                           or the distance assignment. The current available estimators are: 'EMD', 'energy', 'KL', and 'L2'. 
 
     :param scale_list: list of integers or None (default=None). A list of the scales to use for each estimator. The 
                        length of the list is similar to the number of estimators given in the input. The scales must 
@@ -108,125 +108,219 @@ class Sequencer(object):
         distance_matrices_inpath=None, to_save_axis_ratios=True, to_average_N_best_estimators=False, number_of_best_estimators=None, \
         to_use_parallelization=False):
         """Main function of the sequencer that applies the algorithm to the data, and returns the best sequence and its axis ratio.
-        The function can save many intermediate products, such as the distance matrices for each estimator and scale. The user is 
-        encoraged to save these products, since they can be used later and reduce dramatically the computation time.
+        (*) The function can save many intermediate products, such as the distance matrices for each estimator and scale. The user is 
+        encoraged to save these products, since they can be used later to reduce dramatically the computation time. 
+        (*) The function also allows the user to perform the majority vote using the N best estimators, instead of using all of 
+        them.
 
         Parameters
         ----------
-        :param outpath: string, the path of a directory to which the function will save intermediate products and log file.
-        :param to_print_progress: boolean, whether to print in the python shell the progress of the code. Default is True.
-        :param to_calculate_distance_matrices: boolean, whether to calculate the distance matrices. Default is True, and then the 
-            sequencer calculates the distance matrices (which can take a while). If the matrices were already calculated, 
-            one should set to_calculate_distance_matrices=False and provide the path of the distance matrices
-            using distance_matrices_inpath. 
-        :param to_save_distance_matrices: boolean, whether to save the distance matrices for future use of the sequencer. The distance
-            matrices are saved in a dictionary format which can later be used by the sequencer when setting 
-            to_calculate_distance_matrices = False and providing the code with the distance matrices path.
-    @distance_matrices_inpath: if to_calculate_distance_matrices == False, function loads the distance matrices from this path.
-            The code assumes that the distance matrices are saved in a dictionary format which is similar to the format
-            used by the sequencer to save them.
-    @to_save_axis_ratios: boolean, whether to save the derived axis ratios for each estimator and scale. Default is True.
-            These can be useful to map the important distance measures and scales of the problem.
-    @return_weighted_products: boolean, whether to return the weighted distance matrices and their axis ratios.
-    @to_average_N_best_estimators: boolean, whether to consider only N best estimators and scales when constructing the final sequence. 
-            Default is False, and the sequencer considers the information from all estimators and scales. 
-    @number_of_best_estimators: boolean, if to_average_N_best_estimators == True, function constructs the sequence
-            while considering only the best number_of_best_estimators (in terms of axis ratio) estimator-scale results.
-    @to_use_parallelization: boolean, whether to use parallelization when estimating the distance matrices. The parallelization
-            is built for the specific machine we used in our study and will not necessarily work on a different machine.
-            Default is False.
+        :param outpath: string, the path of a directory to which the function will save intermediate products and the log file.
+
+        :param to_print_progress: boolean (default=True), whether to print the progress of the code. 
+
+        :param to_calculate_distance_matrices: boolean (default=True), whether to calculate the distance matrices per estimator
+            and scale. If True, the distance matrices per estimator and scale are eatimated. If the distance matrices were already
+            calculated in a previous run of the function, the user is encoraged to set to_calculate_distance_matrices=False and 
+            provide a path where the matrices are available using distance_matrices_inpath.
+
+        :param to_save_distance_matrices: boolean (default=True), whether to save the estimated distance matrices or not. The user 
+            strongly encoraged to save the matrices in order to reduce the computation time of future runs.
+
+        :param distance_matrices_inpath: string (default=None), the input path of the distance matrices. If the distance matrices
+            were already estimated in a previous run of the function, the user can avoid the re-computation of the distance matrices
+            and load them from the given path. This can be done by setting to_calculate_distance_matrices=False and providing the 
+            input path of the distance matrices.
+
+        :param to_save_axis_ratios: boolean (default=True), whether to save the derived axis ratios for each estimator and scale. 
+            For each scale, the function will also save the derived axis ratios of each part (chunk) into which the objects are 
+            split into. These values can be useful to map the important metrics and scales of the problem.
+
+        :param to_average_N_best_estimators: boolean (default=False), whether to consider only N best metrics + scales when 
+            constructing the final sequence. If to_average_N_best_estimators=True, the function will perform a majority vote
+            only considering the N estimators (metrics + scales) with the highest axis ratios.
+
+        :param number_of_best_estimators: integer (default=None), the number of estimators to consider in the majority vote. 
+            If to_average_N_best_estimators=True, then the user must provide an integer number. 
+
+        :param to_use_parallelization: boolean (default=False), whether to use parallelization when estimating the distance matrices. The parallelization
+
+        Returns
+        -------
+        :param final_mst_axis_ratio: float, the final axis ratio of the detected sequence. 
+            This is obtained after populating the separate sequences for the different metrics+scales, averaged according to 
+            their respective axis ratios. See the paper for additional details.
+        :param final_sequence: numpy.ndarray of integers, the final detected sequence. 
         """
+        N_obj = len(self.objects_list)
+
+        assert ((len(self.grid.shape) == 1) or (len(self.grid.shape) == 2)), "objects can be one- or two-dimensional"
+        assert (~numpy.isnan(self.grid)).all(), "grid cannot contain nan values"
+        assert (~numpy.isinf(self.grid)).all(), "grid cannot contain infinite values"
+        assert (~numpy.isneginf(self.grid)).all(), "grid cannot contain negative infinite values"
+        assert ((len(self.objects_list.shape) == 2) or (len(self.objects_list.shape) == 3)), "objects can be one- or two-dimensional"
+        assert (~numpy.isnan(self.objects_list)).all(), "objects_list cannot contain nan values"
+        assert (~numpy.isinf(self.objects_list)).all(), "objects_list cannot contain infinite values"
+        assert (~numpy.isneginf(self.objects_list)).all(), "objects_list cannot contain negative infinite values"
+        if len(self.grid.shape) == 1:
+            assert (self.grid.shape[0] == self.objects_list.shape[1]), "the grid and the objects must have the same dimensions"
+        if len(self.grid.shape) == 2:
+            assert ((self.grid.shape[0] == self.objects_list.shape[1]) and (self.grid.shape[1] == self.objects_list.shape[2])), "the grid and the objects must have the same dimensions"
+
+        assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(self.scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
+        assert numpy.fromiter([estimator_value in ['EMD_brute_force', 'energy', 'KL', 'L2'] for estimator_value in self.estimator_list], dtype=bool).all(), "estimators must be EMD_brute_force, energy, KL or L2"
+        assert len(self.scale_list) == len(self.estimator_list), "the length of scale_list must equal to the length of estimator_list"
+        for scale_value in self.scale_list:
+            scale_shape = numpy.array(scale_value).shape
+            assert len(self.grid.shape) == len(scale_shape), "the shape of scales must be similar to the shape of the data"
+            if len(self.grid.shape) == 1:
+                assert scale_shape[0] < self.grid.shape[0], "the scale must be smaller than the input data"
+            if len(grid.shape) == 2:
+                assert (scale_shape[0] < self.grid.shape[0]) and (scale_shape[1] < self.grid.shape[1]), "the scale must be smaller than the input data"
+
+        assert type(outpath) == str, "outpath should be string"
+        assert os.path.isdir(outpath), "outpath should be a directory"
+
+        if to_calculate_distance_matrices == True: 
+            assert distance_matrices_inpath == None, "if to_calculate_distance_matrices=True, distance_matrices_inpath must be None"
+        if distance_matrices_inpath != None:
+            assert (to_calculate_distance_matrices == False), "if distance_matrices_inpath is not None, to_calculate_distance_matrices must be False"
+            assert type(distance_matrices_inpath) == str, "distance_matrices_inpath path should be string"
+        
+        if to_average_N_best_estimators == False: 
+            assert number_of_best_estimators == None, "if to_average_N_best_estimators=False, number_of_best_estimators must be None"
+        if to_average_N_best_estimators == True:
+            assert isinstance(number_of_best_estimators, int), "if to_average_N_best_estimators=True, number_of_best_estimators must be an integer"
+
+        self.outpath = outpath
+        self.to_print_progress = to_print_progress
+        self.to_calculate_distance_matrices = to_calculate_distance_matrices
+        self.to_save_distance_matrices = to_save_distance_matrices
+        self.distance_matrices_inpath = distance_matrices_inpath
+        self.to_save_axis_ratios = to_save_axis_ratios
+        self.to_average_N_best_estimators = to_average_N_best_estimators
+        self.number_of_best_estimators = number_of_best_estimators
+        self.to_use_parallelization = to_use_parallelization
+
+        ########################################################################################################
+        ######### Parallelization                                                                    ###########
+        ######################################################################################################## 
+        if self.to_use_parallelization:
+            num_cores = multiprocessing.cpu_count()
+            if self.to_print_progress:
+                print("Parallelization is ON. Number of cores:", num_cores)
+
+        ########################################################################################################
+        ######### Output files                                                                       ###########
+        ######################################################################################################## 
+        self.log_file_outpath = "%s/log_file.txt" % self.outpath
+        self.distance_matrices_outpath = "%s/distance_matrices.pkl" % self.outpath
+        self.axis_ratios_outpath = "%s/axis_ratios.pkl" % self.outpath
+        self.weighted_distance_matrix_outpath = "%s/weighted_distance_matrix.pkl" % self.outpath
+        self.sparse_distance_matrix_outpath = "%s/sparse_distance_matrix.pkl" % self.outpath
+        self.final_products_outpath = "%s/final_products.pkl" % self.outpath
+
+        file_log = open(self.log_file_outpath, "a")
+        file_log.write("started the run\n")
+        file_log.flush()
+
+        ########################################################################################################
+        ######### STEP 1: load or calculate distance matrices for different estimators and scales    ###########
+        ########################################################################################################    
+        if self.to_calculate_distance_matrices == False:
+            distance_matrix_dictionary = self._load_distance_matrices_from_path()
+
+        else:
+            distance_matrix_dictionary = self._return_distance_matrix_dictionary_for_estimators_and_scales()
+            # save it if neccessary
+            if self.to_save_distance_matrices == True:
+                self._dump_distance_matrices_to_path(distance_matrix_dictionary)
+                if self.to_print_progress:
+                    print("dumped the distance matrix dictionaries to the file: %s" % self.distance_matrices_outpath)
+
+        ########################################################################################################
+        ######### STEP 2: order the spectra based on the different distance matrices, and measure    ###########
+        #########         weights using the MST axis ratios.                                         ###########
+        #########         Produce weighted distance matrix per scale and estimator.                  ###########    
+        ######################################################################################################## 
+        self.weighted_axis_ratio_and_sequence_dictionary = {}
+        # the following lists will be used in STEP 3 for the proximity matrices
+        MST_list = []
+        weight_list = []
+        distance_matrix_all = numpy.zeros((N_obj, N_obj))
+
+        if self.to_print_progress:
+            print("strating to sequence the different scales and estimators")
+
+        for estimator_index, estimator_name in enumerate(self.estimator_list):
+            scale_list_for_estimator = self.scale_list[estimator_index]
+            for scale_index, scale_value in enumerate(scale_list_for_estimator):
+                if self.to_print_progress:
+                    print("in estimator: %s, scale: %s" % (estimator_name, scale_value))
+
+                distance_matrix_list = distance_matrix_dictionary[(estimator_name, scale_value)]
+                weighted_distance_matrix, ordering_per_chunk_list, axis_ratio_per_chunk_list = self._return_weighted_distance_matrix_for_single_estimator_and_scale(distance_matrix_list, to_return_axis_ratio_list=True)
+                # now obtain sequences from the weighted distance matrix
+                ordering_bfs, ordering_dfs, mst_axis_ratio, MST = self._apply_MST_and_return_BFS_DFS_ordering(weighted_distance_matrix, return_axis_ratio=True, return_MST=True)
+
+                MST_list.append(MST)
+                weight_list.append(mst_axis_ratio)
+                distance_matrix_all += (weighted_distance_matrix * mst_axis_ratio)
+                # add the sequences and their axis ratios into a dictionary
+                self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale_value, "chunks")] = (axis_ratio_per_chunk_list, ordering_per_chunk_list)
+                self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale_value, "weighted")] = (mst_axis_ratio, ordering_bfs)
 
 
+        if self.to_save_axis_ratios:
+            f_axis_ratios = open(self.axis_ratios_outpath, "wb")
+            pickle.dump(self.weighted_axis_ratio_and_sequence_dictionary, f_axis_ratios)
+            f_axis_ratios.close()
+            if self.to_print_progress:
+                print("dumped the axis ratios to the file: %s" % self.axis_ratios_outpath)
 
-def main_of_sequence_parallel(grid, objects_list, estimator_list, scale_list, outpath, to_print_progress=True, \
-         to_calculate_distance_matrices=True, to_save_distance_matrices=True, \
-         distance_matrices_inpath=None, to_save_axis_ratios=True, return_weighted_products=True, \
-         to_average_N_best_estimators=False, number_of_best_estimators=None, \
-         to_use_parallelization=False):
-    """
-    This is the main function of the sequencer. The function takes as an input the grid, objects_list, estimator_list,
-    and scale_list and calculates the weighted sequence according to these inputs.
-    
-    The input to the code:
-    @grid: numpy.ndarray(), the grid onto which the objects are interpolated. The grid should consists of float values
-           and should not contain nan and infinite values. The data is assumed to be 1 or 2 dimensional.
+        distance_matrix_all /= numpy.sum(weights_all_bfs)
+        numpy.fill_diagonal(distance_matrix_all, 0) 
+        f_distance = open(self.weighted_distance_matrix_outpath, "wb")
+        pickle.dump(distance_matrix_all, f_distance)
+        f_distance.close()
+        if self.to_print_progress:
+            print("dumped the full weighted distance matrix to the file: %s" % self.weighted_distance_matrix_outpath)
 
-    @objects_list: numpy.ndarray(), the list of object features to be considered for the sequencing. The objects are
-            assumed to be interpolated to a common grid and should not contain nan of infinite values.
-            The data is assumed to be 1 or 2 dimensional, therefore the objects list should have 2 or 3 dimensions.
-    @estimator_list: list, a list of the estimators to be used for the distance measurement.
-            The estimators can be: ['EMD_brute_force', 'energy', 'KL', 'L2']
-    @scale_list: list, a list of the scales to use for each estimator. The length of the list is similar to the 
-            number of estimators given in the input. The scales must be interger values that correspond to the number 
-            of chunks the data is divided to. If the data is one-dimensional, a single chunk value is given for each 
-            scale, e.g., scale_list=[[1,2,4], [1,2,4]] if estimator_list=['EMD_brute_force', 'KL']. If the data is 
-            two-dimensional, two chunk values are given of each scale, e.g., [[(1,1), (1,2), (2,1)], [(1,1), (1,2), (2,1)]]
-            if estimator_list=['EMD_brute_force', 'KL'].
-    @outpath: string, a directory path in which the output data and the log file will be saved.
-    @to_print_progress: boolean, whether to print in the python shell the progress of the code. Default is True.
-    @to_calculate_distance_matrices: boolean, whether to calculate the distance matrices. Default is True, and then the 
-            sequencer calculates the distance matrices (which can take a while). If the matrices were already calculated, 
-            one should set to_calculate_distance_matrices=False and provide the path of the distance matrices
-            using distance_matrices_inpath. 
-    @to_save_distance_matrices: boolean, whether to save the distance matrices for future use of the sequencer. The distance
-            matrices are saved in a dictionary format which can later be used by the sequencer when setting 
-            to_calculate_distance_matrices = False and providing the code with the distance matrices path.
-    @distance_matrices_inpath: if to_calculate_distance_matrices == False, function loads the distance matrices from this path.
-            The code assumes that the distance matrices are saved in a dictionary format which is similar to the format
-            used by the sequencer to save them.
-    @to_save_axis_ratios: boolean, whether to save the derived axis ratios for each estimator and scale. Default is True.
-            These can be useful to map the important distance measures and scales of the problem.
-    @return_weighted_products: boolean, whether to return the weighted distance matrices and their axis ratios.
-    @to_average_N_best_estimators: boolean, whether to consider only N best estimators and scales when constructing the final sequence. 
-            Default is False, and the sequencer considers the information from all estimators and scales. 
-    @number_of_best_estimators: boolean, if to_average_N_best_estimators == True, function constructs the sequence
-            while considering only the best number_of_best_estimators (in terms of axis ratio) estimator-scale results.
-    @to_use_parallelization: boolean, whether to use parallelization when estimating the distance matrices. The parallelization
-            is built for the specific machine we used in our study and will not necessarily work on a different machine.
-            Default is False.
-    """
-    grid = numpy.array(grid)
-    objects_list = numpy.array(objects_list)
-    N_obj = len(objects_list)
+        ########################################################################################################
+        ######### STEP 3: use the axis ratios of the weighted distance matrices sequences            ###########
+        #########         to build proximity matrices, then convert them to distance matrices,       ###########
+        #########         and obtain the final BFS and DFS sequences.                                ###########    
+        ######################################################################################################## 
 
-    assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be one- or two-dimensional"
-    assert (~numpy.isnan(grid)).all(), "grid cannot contain nan values"
-    assert (~numpy.isinf(grid)).all(), "grid cannot contain infinite values"
-    assert (~numpy.isneginf(grid)).all(), "grid cannot contain negative infinite values"
-    assert ((len(objects_list.shape) == 2) or (len(objects_list.shape) == 3)), "objects can be one- or two-dimensional"
-    assert (~numpy.isnan(objects_list)).all(), "objects_list cannot contain nan values"
-    assert (~numpy.isinf(objects_list)).all(), "objects_list cannot contain infinite values"
-    assert (~numpy.isneginf(objects_list)).all(), "objects_list cannot contain negative infinite values"
-    if len(grid.shape) == 1:
-        assert (grid.shape[0] == objects_list.shape[1]), "the grid and the objects must have the same dimensions"
-    if len(grid.shape) == 2:
-        assert ((grid.shape[0] == objects_list.shape[1]) and (grid.shape[1] == objects_list.shape[2])), "the grid and the objects must have the same dimensions"
+        proximity_matrix_sparse = self._return_proximity_matrix_populated_by_MSTs_avg_prox(MST_list, weight_list)
+        distance_matrix_sparse = self._convert_proximity_to_distance_matrix(proximity_matrix_sparse)
+        ordering_bfs, ordering_dfs, mst_axis_ratio = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_sparse, return_axis_ratio=True, return_MST=False)
 
-    assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
-    assert numpy.fromiter([estimator_value in ['EMD_brute_force', 'energy', 'KL', 'L2'] for estimator_value in estimator_list], dtype=bool).all(), "estimators must be EMD_brute_force, energy, KL or L2"
-    assert len(scale_list) == len(estimator_list), "the length of scale_list must equal to the length of estimator_list"
-    for scale_value in scale_list:
-        scale_shape = numpy.array(scale_value).shape
-        assert len(grid.shape) == len(scale_shape), "the shape of scales must be similar to the shape of the data"
-        if len(grid.shape) == 1:
-            assert scale_shape[0] < grid.shape[0], "the scale must be smaller than the input data"
-        if len(grid.shape) == 2:
-            assert (scale_shape[0] < grid.shape[0]) and (scale_shape[1] < grid.shape[1]), "the scale must be smaller than the input data"
+        self.final_mst_axis_ratio = mst_axis_ratio
+        self.final_sequence = ordering_bfs
+        ########################################################################################################
+        ######### STEP 4: save the final BFS and DFS sequences, their final axis ratio, and          ###########
+        #########         the sparse distance matrix that was used to obtain these.                  ###########
+        ######################################################################################################## 
+        f_distance = open(self.sparse_distance_matrix_outpath, "wb")
+        pickle.dump(distance_matrix_sparse, f_distance)
+        f_distance.close()
+        if self.to_print_progress:
+            print("dumped the sparse distance matrix to the file: %s" % f_distance)
 
-    assert type(outpath) == str, "output path should be string"
-    assert os.path.isdir(outpath), "output path should be a directory"
+        final_sequences_dict = {'BFS': ordering_bfs, 'DFS': ordering_dfs}
+        f_final_products = open(self.final_products_outpath, "wb")
+        pickle.dump([mst_axis_ratio, final_sequences_dict], f_final_products)
+        f_final_products.close()
+        if self.to_print_progress:
+            print("dumped the final sequences and axis ratio to the file: %s" % f_final_products)
 
-    if to_calculate_distance_matrices == True: 
-        assert distance_matrices_inpath == None, "if to_calculate_distance_matrices=True, distance_matrices_inpath must be None"
-    if distance_matrices_inpath != None:
-        assert (to_calculate_distance_matrices == False), "if to_calculate_distance_matrices is not None, to_calculate_distance_matrices must be False"
-        assert type(distance_matrices_inpath) == str, "distance_matrices_inpath path should be string"
-    
-    if to_average_N_best_estimators == False: 
-        assert number_of_best_estimators == None, "if to_average_N_best_estimators=False, number_of_best_estimators must be None"
-    if to_average_N_best_estimators == True:
-        assert isinstance(number_of_best_estimators, int), "if to_average_N_best_estimators=True, number_of_best_estimators must be an integer"
+        # remove the temporary directory and the temporary data if choice_parallelization=True
+        if self.to_use_parallelization:
+            folder = './joblib_memmap'
+            shutil.rmtree(folder)
+        
+        return self.final_mst_axis_ratio, self.final_sequence
 
 
 #######################################################################################################################
@@ -708,7 +802,7 @@ def return_distance_matrix_dictionary_for_estimators_and_scales(grid, objects_li
             distance_matrix_dictionary[(estimator_name, scale_value)] = distance_matrix_list
     return distance_matrix_dictionary
 
-def return_weighted_distance_matrix_for_single_estimator_and_scale(distance_matrix_list, to_return_weight_list=True):
+def return_weighted_distance_matrix_for_single_estimator_and_scale(distance_matrix_list, to_return_axis_ratio_list=True, to_return_sequence_list=True):
     """
     Function takes as an input a list of distance matrices, which correspond to the different chunks at a given scale.
     Function orders the spectra according to each chunk and measures the axis ratio which serves as a weight of each sequence.
@@ -728,239 +822,22 @@ def return_weighted_distance_matrix_for_single_estimator_and_scale(distance_matr
         assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
         assert (numpy.diagonal(distance_matrix) == 0).all(), "distance matrix must contain zero values in its diagonal"
 
-    weight_list = []
+    axis_ratio_list = []
+    ordering_list = []
     for chunk_index in range(len(distance_matrix_list)):
         distance_matrix_of_chunk = distance_matrix_list[chunk_index]
-        mst, mst_axis_ratio = apply_MST_and_return_MST_and_axis_ratio(distance_matrix_of_chunk, return_axis_ratio=True)
-        weight_of_chunk = mst_axis_ratio
-        weight_list.append(weight_of_chunk)
-
-    weight_list = numpy.array(weight_list).astype(numpy.float32)
+        ordering_bfs, ordering_dfs, mst_axis_ratio, mst = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_of_chunk, return_axis_ratio=True, return_MST=True)
+        axis_ratio_list.append(mst_axis_ratio)
+        ordering_list.append(ordering_bfs)
+    axis_ratio_list = numpy.array(axis_ratio_list)
 
     # now take the weighted average to the list according to the weights you calculated
-    weighted_distance_matrix = numpy.average(distance_matrix_list, axis=0, weights=weight_list)
-    if to_return_weight_list:
-        return weighted_distance_matrix, weight_list
+    weighted_distance_matrix = numpy.average(distance_matrix_list, axis=0, weights=axis_ratio_list)
+    if to_return_axis_ratio_list and to_return_sequence_list:
+        return weighted_distance_matrix, ordering_list, axis_ratio_list
+    elif to_return_axis_ratio_list and not to_return_sequence_list:
+        return weighted_distance_matrix, sequence_list
     else:
         return weighted_distance_matrix
 
-def main_of_sequence_parallel(grid, objects_list, estimator_list, scale_list, outpath, to_print_progress=True, \
-         to_calculate_distance_matrices=True, to_save_distance_matrices=True, \
-         distance_matrices_inpath=None, to_save_axis_ratios=True, return_weighted_products=True, \
-         to_average_N_best_estimators=False, number_of_best_estimators=None, \
-         to_use_parallelization=False):
-    """
-    This is the main function of the sequencer. The function takes as an input the grid, objects_list, estimator_list,
-    and scale_list and calculates the weighted sequence according to these inputs.
-    
-    The input to the code:
-    @grid: numpy.ndarray(), the grid onto which the objects are interpolated. The grid should consists of float values
-           and should not contain nan and infinite values. The data is assumed to be 1 or 2 dimensional.
-    @objects_list: numpy.ndarray(), the list of object features to be considered for the sequencing. The objects are
-            assumed to be interpolated to a common grid and should not contain nan of infinite values.
-            The data is assumed to be 1 or 2 dimensional, therefore the objects list should have 2 or 3 dimensions.
-    @estimator_list: list, a list of the estimators to be used for the distance measurement.
-            The estimators can be: ['EMD_brute_force', 'energy', 'KL', 'L2']
-    @scale_list: list, a list of the scales to use for each estimator. The length of the list is similar to the 
-            number of estimators given in the input. The scales must be interger values that correspond to the number 
-            of chunks the data is divided to. If the data is one-dimensional, a single chunk value is given for each 
-            scale, e.g., scale_list=[[1,2,4], [1,2,4]] if estimator_list=['EMD_brute_force', 'KL']. If the data is 
-            two-dimensional, two chunk values are given of each scale, e.g., [[(1,1), (1,2), (2,1)], [(1,1), (1,2), (2,1)]]
-            if estimator_list=['EMD_brute_force', 'KL'].
-    @outpath: string, a directory path in which the output data and the log file will be saved.
-    @to_print_progress: boolean, whether to print in the python shell the progress of the code. Default is True.
-    @to_calculate_distance_matrices: boolean, whether to calculate the distance matrices. Default is True, and then the 
-            sequencer calculates the distance matrices (which can take a while). If the matrices were already calculated, 
-            one should set to_calculate_distance_matrices=False and provide the path of the distance matrices
-            using distance_matrices_inpath. 
-    @to_save_distance_matrices: boolean, whether to save the distance matrices for future use of the sequencer. The distance
-            matrices are saved in a dictionary format which can later be used by the sequencer when setting 
-            to_calculate_distance_matrices = False and providing the code with the distance matrices path.
-    @distance_matrices_inpath: if to_calculate_distance_matrices == False, function loads the distance matrices from this path.
-            The code assumes that the distance matrices are saved in a dictionary format which is similar to the format
-            used by the sequencer to save them.
-    @to_save_axis_ratios: boolean, whether to save the derived axis ratios for each estimator and scale. Default is True.
-            These can be useful to map the important distance measures and scales of the problem.
-    @return_weighted_products: boolean, whether to return the weighted distance matrices and their axis ratios.
-    @to_average_N_best_estimators: boolean, whether to consider only N best estimators and scales when constructing the final sequence. 
-            Default is False, and the sequencer considers the information from all estimators and scales. 
-    @number_of_best_estimators: boolean, if to_average_N_best_estimators == True, function constructs the sequence
-            while considering only the best number_of_best_estimators (in terms of axis ratio) estimator-scale results.
-    @to_use_parallelization: boolean, whether to use parallelization when estimating the distance matrices. The parallelization
-            is built for the specific machine we used in our study and will not necessarily work on a different machine.
-            Default is False.
-    """
-    grid = numpy.array(grid)
-    objects_list = numpy.array(objects_list)
-    N_obj = len(objects_list)
-
-    assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be one- or two-dimensional"
-    assert (~numpy.isnan(grid)).all(), "grid cannot contain nan values"
-    assert (~numpy.isinf(grid)).all(), "grid cannot contain infinite values"
-    assert (~numpy.isneginf(grid)).all(), "grid cannot contain negative infinite values"
-    assert ((len(objects_list.shape) == 2) or (len(objects_list.shape) == 3)), "objects can be one- or two-dimensional"
-    assert (~numpy.isnan(objects_list)).all(), "objects_list cannot contain nan values"
-    assert (~numpy.isinf(objects_list)).all(), "objects_list cannot contain infinite values"
-    assert (~numpy.isneginf(objects_list)).all(), "objects_list cannot contain negative infinite values"
-    if len(grid.shape) == 1:
-        assert (grid.shape[0] == objects_list.shape[1]), "the grid and the objects must have the same dimensions"
-    if len(grid.shape) == 2:
-        assert ((grid.shape[0] == objects_list.shape[1]) and (grid.shape[1] == objects_list.shape[2])), "the grid and the objects must have the same dimensions"
-
-    assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
-    assert numpy.fromiter([estimator_value in ['EMD_brute_force', 'energy', 'KL', 'L2'] for estimator_value in estimator_list], dtype=bool).all(), "estimators must be EMD_brute_force, energy, KL or L2"
-    assert len(scale_list) == len(estimator_list), "the length of scale_list must equal to the length of estimator_list"
-    for scale_value in scale_list:
-        scale_shape = numpy.array(scale_value).shape
-        assert len(grid.shape) == len(scale_shape), "the shape of scales must be similar to the shape of the data"
-        if len(grid.shape) == 1:
-            assert scale_shape[0] < grid.shape[0], "the scale must be smaller than the input data"
-        if len(grid.shape) == 2:
-            assert (scale_shape[0] < grid.shape[0]) and (scale_shape[1] < grid.shape[1]), "the scale must be smaller than the input data"
-
-    assert type(outpath) == str, "output path should be string"
-    assert os.path.isdir(outpath), "output path should be a directory"
-
-    if to_calculate_distance_matrices == True: 
-        assert distance_matrices_inpath == None, "if to_calculate_distance_matrices=True, distance_matrices_inpath must be None"
-    if distance_matrices_inpath != None:
-        assert (to_calculate_distance_matrices == False), "if to_calculate_distance_matrices is not None, to_calculate_distance_matrices must be False"
-        assert type(distance_matrices_inpath) == str, "distance_matrices_inpath path should be string"
-    
-    if to_average_N_best_estimators == False: 
-        assert number_of_best_estimators == None, "if to_average_N_best_estimators=False, number_of_best_estimators must be None"
-    if to_average_N_best_estimators == True:
-        assert isinstance(number_of_best_estimators, int), "if to_average_N_best_estimators=True, number_of_best_estimators must be an integer"
-
-    ########################################################################################################
-    ######### Parallelization                                                                    ###########
-    ######################################################################################################## 
-    choice_parallelization = to_use_parallelization
-    if choice_parallelization:
-        num_cores = multiprocessing.cpu_count()
-        if to_print_progress:
-            print("Parallelization is ON. Number of cores:",num_cores)
-    my_choice_parallelization = choice_parallelization
-
-    ########################################################################################################
-    ######### Output files                                                                       ###########
-    ######################################################################################################## 
-    log_file_path = "%s/log_file.txt" % outpath
-    distance_matrices_outpath = "%s/distance_matrices.pkl" % outpath
-    axis_ratios_outpath = "%s/axis_ratios.pkl" % outpath
-    weighted_distance_matrix_outpath = "%s/weighted_distance_matrix.pkl" % outpath
-    sparse_distance_matrix_outpath = "%s/sparse_distance_matrix.pkl" % outpath
-    final_products_outpath = "%s/final_products.pkl" % outpath
-
-    file_log = open(log_file_path, "a")
-    file_log.write("started the run\n")
-    file_log.flush()
-
-    ########################################################################################################
-    ######### STEP 1: load or calculate distance matrices for different estimators and scales    ###########
-    ########################################################################################################    
-    if to_calculate_distance_matrices == False:
-        distance_matrix_dictionary = load_distance_matrices_from_path(distance_matrices_inpath, scale_list, estimator_list)
-
-    else:
-        objects_list_copy = numpy.copy(objects_list)
-        distance_matrix_dictionary = return_distance_matrix_dictionary_for_estimators_and_scales(grid, objects_list_copy, scale_list, estimator_list, choice_parallelization, file_log, to_print_progress)
-        # save it if neccessary
-        if to_save_distance_matrices == True:
-            dump_distance_matrices_to_path(distance_matrices_outpath, distance_matrix_dictionary)
-            if to_print_progress:
-                print("dumped the distance matrix dictionaries to the file: %s" % distance_matrices_outpath)
-
-    ########################################################################################################
-    ######### STEP 2: order the spectra based on the different distance matrices, and measure    ###########
-    #########         weights using the MST axis ratios.                                         ###########
-    #########         Produce weighted distance matrix per scale and estimator.                  ###########    
-    ######################################################################################################## 
-    weighted_axis_ratio_dictionary = {}
-    # the following lists will be used in STEP 3 for the proximity matrices
-    sequences_all_bfs = []
-    sequences_all_dfs = []
-    weights_all_bfs = []
-    weights_all_dfs = []
-    MST_list = []
-    distance_matrix_all = numpy.zeros((N_obj, N_obj))
-
-    if to_print_progress:
-        print("strating to sequence the different scales and estimators")
-
-    for estimator_index, estimator_name in enumerate(estimator_list):
-        scale_list_for_estimator = scale_list[estimator_index]
-
-        for scale_index, scale_value in enumerate(scale_list_for_estimator):
-            if to_print_progress:
-                print("in estimator: %s, scale: %s" % (estimator_name, scale_value))
-
-            distance_matrix_list = distance_matrix_dictionary[(estimator_name, scale_value)]
-            weighted_distance_matrix, weight_per_chunk_list = return_weighted_distance_matrix_for_single_estimator_and_scale(distance_matrix_list, to_return_weight_list=True)
-
-            # now obtain sequences from the weighted distance matrix
-            ordering_bfs, ordering_dfs, mst_axis_ratio, MST = apply_MST_and_return_BFS_DFS_ordering(weighted_distance_matrix, return_axis_ratio=True, return_MST=True)
-            sequences_all_bfs.append(ordering_bfs)
-            sequences_all_dfs.append(ordering_dfs)
-            MST_list.append(MST)
-            distance_matrix_all += (weighted_distance_matrix * mst_axis_ratio)
-
-            # now get the weight estimate, which is the MST axis ratio in this case
-            weight_of_sequence_bfs = mst_axis_ratio
-            weight_of_sequence_dfs = mst_axis_ratio
-
-            weighted_axis_ratio_dictionary[(estimator_name, scale_value, "chunks")] = weight_per_chunk_list
-            weighted_axis_ratio_dictionary[(estimator_name, scale_value, "BFS")] = weight_of_sequence_bfs
-            weighted_axis_ratio_dictionary[(estimator_name, scale_value, "DFS")] = weight_of_sequence_dfs
-            weights_all_bfs.append(weight_of_sequence_bfs)
-            weights_all_dfs.append(weight_of_sequence_dfs)
-
-    if to_save_axis_ratios:
-        f_axis_ratios = open(axis_ratios_outpath, "wb")
-        pickle.dump(weighted_axis_ratio_dictionary, f_axis_ratios)
-        f_axis_ratios.close()
-        if to_print_progress:
-            print("dumped the axis ratios to the file: %s" % axis_ratios_outpath)
-
-    distance_matrix_all /= numpy.sum(weights_all_bfs)
-    numpy.fill_diagonal(distance_matrix_all, 0) 
-    f_distance = open(weighted_distance_matrix_outpath, "wb")
-    pickle.dump(distance_matrix_all, f_distance)
-    f_distance.close()
-    if to_print_progress:
-        print("dumped the full weighted distance matrix to the file: %s" % weighted_distance_matrix_outpath)
-
-    ########################################################################################################
-    ######### STEP 3: use the axis ratios of the weighted distance matrices sequences            ###########
-    #########         to build proximity matrices, then convert them to distance matrices,       ###########
-    #########         and obtain the final BFS and DFS sequences.                                ###########    
-    ######################################################################################################## 
-
-    proximity_matrix_sparse = return_proximity_matrix_populated_by_MSTs_avg_prox(MST_list, weights_all_bfs, to_average_N_best_estimators, number_of_best_estimators)
-    distance_matrix_sparse = convert_proximity_to_distance_matrix(proximity_matrix_sparse)
-    ordering_bfs, ordering_dfs, mst_axis_ratio = apply_MST_and_return_BFS_DFS_ordering(distance_matrix_sparse, return_axis_ratio=True, return_MST=False)
-
-    ########################################################################################################
-    ######### STEP 4: save the final BFS and DFS sequences, their final axis ratio, and          ###########
-    #########         the sparse distance matrix that was used to obtain these.                  ###########
-    ######################################################################################################## 
-    f_distance = open(sparse_distance_matrix_outpath, "wb")
-    pickle.dump(distance_matrix_sparse, f_distance)
-    f_distance.close()
-    if to_print_progress:
-        print("dumped the sparse distance matrix to the file: %s" % f_distance)
-
-    final_sequences_dict = {'BFS': ordering_bfs, 'DFS': ordering_dfs}
-    f_final_products = open(final_products_outpath, "wb")
-    pickle.dump([mst_axis_ratio, final_sequences_dict], f_final_products)
-    f_final_products.close()
-    if to_print_progress:
-        print("dumped the final sequences and axis ratio to the file: %s" % f_final_products)
-
-    # remove the temporary directory and the temporary data if choice_parallelization=True
-    if choice_parallelization:
-        folder = './joblib_memmap'
-        shutil.rmtree(folder)
-    
-    return mst_axis_ratio, ordering_bfs
 
