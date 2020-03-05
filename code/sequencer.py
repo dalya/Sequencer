@@ -474,7 +474,6 @@ class Sequencer(object):
 
     
     ###################################################### DATA I/O #######################################################
-
     def _load_distance_matrices_from_path(self):
         """Funciton loads the distance matrices into memory from the distance matrix input file.
 
@@ -508,260 +507,303 @@ class Sequencer(object):
         pickle.dump(distance_matrix_dictionary, output_file)
         output_file.close()
 
-#######################################################################################################################
-################################################# Distance measures ###################################################
-#######################################################################################################################
 
-def return_distance_matrix(grid, objects_list, estimator, choice_parallelization):
-    """
-    Function estimates the distance matrix of the given objects with the given estimator.
+    ################################################# Distance measures ###################################################
+    def _return_distance_matrix(self, grid, objects_list, estimator):
+        """Function estimates the distance matrix of the given objects using the given estimator.
 
-    @grid: array-like, the grid on which the objects are interpolated (the x-axis).
-    @objects_list: array-like, the list of objects with their measured features.
-    """
-    grid = numpy.array(grid)
-    objects_list = numpy.array(objects_list)
+        Parameters
+        -------
+        :param grid: numpy.ndarray(), the x-axis of the objects in the sample
+        :param objects_list: a list of numpy.ndarray(), the objects in the sample
+        :param estimator: string, the name of the distance metric to use for the estimation of distance
 
-    assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be 1 or 2 dimensional"
-    assert (~numpy.isnan(grid)).all(), "grid cannot contain nan values"
-    assert (~numpy.isinf(grid)).all(), "grid cannot contain infinite values"
-    assert (~numpy.isneginf(grid)).all(), "grid cannot contain negative infinite values"
-    assert (~numpy.isnan(objects_list)).all(), "objects_list cannot contain nan values"
-    assert (~numpy.isinf(objects_list)).all(), "objects_list cannot contain infinite values"
-    assert (~numpy.isneginf(objects_list)).all(), "objects_list cannot contain negative infinite values"
-    if len(grid.shape) == 1:
-        assert (grid.shape[0] == objects_list.shape[1]), "the grid and the objects must have the same dimensions"
-    if len(grid.shape) == 2:
-        assert ((grid.shape[0] == objects_list.shape[1]) and (grid.shape[1] == objects_list.shape[2])), "the grid and the objects must have the same dimensions"
-    assert estimator in ['EMD_brute_force', 'energy', 'KL', 'L2'], "the distance estimator must be: EMD_brute_force, energy, KL, or L2"
-    if estimator == "EMD_brute_force":
-        assert (objects_list >= 0).all(), "the EMD distance can only be applied to non-negative values"
-    if estimator == "energy":
-        assert (objects_list >= 0).all(), "the energy distance can only be applied to non-negative values"
-    if (estimator == "KL") and (len(grid.shape) == 1):
-        assert (objects_list > 0).all(), "the KL distance can only be applied to positive values"
+        Returns
+        -------
+        :param distance_matrix: numpy.ndarray(), the distance matrix 
+        """
+        grid = numpy.array(grid)
+        objects_list = numpy.array(objects_list)
 
-    # if the distance claculation should be carried out in parallel, save the data that will be used
-    if choice_parallelization:
-        folder = './joblib_memmap'
-        try:
-            os.mkdir(folder)
-        except FileExistsError:
-            pass
+        assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be 1 or 2 dimensional"
+        assert (~numpy.isnan(grid)).all(), "grid cannot contain nan values"
+        assert (~numpy.isinf(grid)).all(), "grid cannot contain infinite values"
+        assert (~numpy.isneginf(grid)).all(), "grid cannot contain negative infinite values"
+        assert (~numpy.isnan(objects_list)).all(), "objects_list cannot contain nan values"
+        assert (~numpy.isinf(objects_list)).all(), "objects_list cannot contain infinite values"
+        assert (~numpy.isneginf(objects_list)).all(), "objects_list cannot contain negative infinite values"
+        if len(grid.shape) == 1:
+            assert (grid.shape[0] == objects_list.shape[1]), "the grid and the objects must have the same dimensions"
+        if len(grid.shape) == 2:
+            assert ((grid.shape[0] == objects_list.shape[1]) and (grid.shape[1] == objects_list.shape[2])), "the grid and the objects must have the same dimensions"
+        assert estimator in ['EMD', 'energy', 'KL', 'L2'], "the distance estimator must be: EMD, energy, KL, or L2"
+        if estimator == "EMD":
+            assert (objects_list >= 0).all(), "the EMD distance can only be applied to non-negative values"
+        if estimator == "energy":
+            assert (objects_list >= 0).all(), "the energy distance can only be applied to non-negative values"
+        if estimator == "KL":
+            assert (objects_list > 0).all(), "the KL distance can only be applied to positive values"
 
-        data_filename_memmap = os.path.join(folder, 'data_memmap')
-        dump(objects_list, data_filename_memmap)
-        objects_list = load(data_filename_memmap, mmap_mode='r')
+        # if the distance claculation should be carried out in parallel, save the data that will be used
+        if self.to_use_parallelization:
+            folder = './joblib_memmap'
+            try:
+                os.mkdir(folder)
+            except FileExistsError:
+                pass
 
-        grid_filename_memmap = os.path.join(folder, 'grid_memmap')
-        dump(grid, grid_filename_memmap)
-        grid = load(grid_filename_memmap, mmap_mode='r')
+            data_filename_memmap = os.path.join(folder, 'data_memmap')
+            dump(objects_list, data_filename_memmap)
+            objects_list = load(data_filename_memmap, mmap_mode='r')
 
-    if estimator == "EMD_brute_force":
-        distance_matrix = return_emd_mat_brute_force(grid, objects_list, choice_parallelization)
+            grid_filename_memmap = os.path.join(folder, 'grid_memmap')
+            dump(grid, grid_filename_memmap)
+            grid = load(grid_filename_memmap, mmap_mode='r')
 
-    if estimator == "energy":
-        distance_matrix = return_energy_mat(grid, objects_list, choice_parallelization)
+        if estimator == "EMD":
+            distance_matrix = distance_metrics.return_emd_mat_brute_force(grid, objects_list, self.to_use_parallelization)
 
-    if estimator == "KL":
-        distance_matrix = return_kl_mat(objects_list, choice_parallelization)
+        if estimator == "energy":
+            distance_matrix = distance_metrics.return_energy_mat(grid, objects_list, self.to_use_parallelization)
 
-    if estimator == "L2":
-        distance_matrix = return_L2_mat(objects_list, choice_parallelization)
+        if estimator == "KL":
+            distance_matrix = distance_metrics.return_kl_mat(objects_list, self.to_use_parallelization)
 
-    return distance_matrix
+        if estimator == "L2":
+            distance_matrix = distance_metrics.return_L2_mat(objects_list, self.to_use_parallelization)
 
-#######################################################################################################################
-################################################## Scale functions ####################################################
-#######################################################################################################################
+        return distance_matrix
 
-def normalise_objects(objects_list):
-    """
-    function normalises the objects such that the sum of each object is 1
-    objects_list: a numpy array of 2 or 3 dimensions
-    """
-    assert ((len(objects_list.shape) == 2) or (len(objects_list.shape) == 3)), "objects can be either 1D or 2D"
+    ################################################## Scale functions ####################################################
+    def _normalise_objects(self, objects_list):
+        """Function normalizes each of the objects in the list such that the sum of its elements will be one.
 
-    if len(objects_list.shape) == 2:
-        sum_vector = numpy.sum(objects_list, axis=1)
-        objects_list_normalised = objects_list / sum_vector[:, numpy.newaxis]
+        Parameters
+        -------
+        :param objects_list: a list of numpy.ndarray(), the objects in the sample
 
-    if len(objects_list.shape) == 3:
-        sum_vector = numpy.sum(objects_list, axis=(1,2))
-        objects_list_normalised = objects_list / sum_vector[:, numpy.newaxis, numpy.newaxis]
+        Returns
+        -------
+        :param objects_list: a list of numpy.ndarray(), the normalized objects
+        """
+        assert ((len(objects_list.shape) == 2) or (len(objects_list.shape) == 3)), "objects can be either 1D or 2D"
 
-    return objects_list_normalised
+        if len(objects_list.shape) == 2:
+            sum_vector = numpy.sum(objects_list, axis=1)
+            objects_list_normalised = objects_list / sum_vector[:, numpy.newaxis]
 
-def divide_to_chunks_1D(grid, objects_list, N_chunks):
-    """
-    The function divides the data into chunks according to N_chunks. 
-    The function then normalizes each split chunk to have a sum of 1, which is required by the distance metrics.
-    The data is assumed to be 1-dimensional.
-    The function uses numpy.array operations only partialy (which makes it slower), because the split arrays
-    can have different sizes. This is because N_chunks can be an integer that does not equally divide the axis.
+        if len(objects_list.shape) == 3:
+            sum_vector = numpy.sum(objects_list, axis=(1,2))
+            objects_list_normalised = objects_list / sum_vector[:, numpy.newaxis, numpy.newaxis]
 
-    @grid: the grid on which the objects are interpolated, a vector in this case.
-    @objects_list: the list of objects with their measured features, assumed to be a 2D array.
-    @N_chunks: an integer, the number of chunks to which to divide the data.
-    """
-    grid_split = numpy.array_split(grid, N_chunks)
-    objects_list_split = numpy.array_split(objects_list, N_chunks, axis=-1)
-    objects_list_split_normalised = []
-    for objects_list_chunk in objects_list_split:
-        sum_vec = numpy.sum(objects_list_chunk, axis=-1)
-        object_list_chunk_norm = objects_list_chunk / sum_vec[:, numpy.newaxis]
-        objects_list_split_normalised.append(object_list_chunk_norm)
-            
-    return grid_split, objects_list_split_normalised
+        return objects_list_normalised
 
-def divide_to_chunks_2D(grid, objects_list, N_chunks):
-    """
-    The function divides the data into chunks according to N_chunks. 
-    The function then normalizes each split chunk to have a sum of 1, which is required by the distance metrics.
-    The data is assumed to be 2-dimensional.
-    The function uses numpy.array operations only partialy (which makes it slower), because the split arrays
-    can have different sizes. This is because N_chunks can be an integer that does not equally divide the axis.
+    def _divide_to_chunks_1D(self, grid, objects_list, N_chunks):
+        """Function divides the data into chunks according to N_chunks, and then normalizes each chunk to have a sum of one.
+        Function also splits the grid array into the same chunks. Function assumes that the grid is 1D and the object list 
+        is 2D.
 
-    @grid: the grid on which the objects are interpolated, a matrix in this case.
-    @objects_list: the list of objects with their measured features, assumed to be a 3D array.
-    @N_chunks: a tuple of length 2, the number of chunks to which to divide the data.
-    """
-    grid_split = []
-    for grid_split_tmp in numpy.array_split(grid, N_chunks[0], axis=0):
-        grid_split += numpy.array_split(grid_split_tmp, N_chunks[1], axis=1)
-    
-    objects_list_split_normalised = []
-    objects_list_split_1 = numpy.array_split(objects_list, N_chunks[0], axis=1)
-    for objects_list_split_tmp in objects_list_split_1:
-        objects_list_split_2 = numpy.array_split(objects_list_split_tmp, N_chunks[1], axis=2)
-        for objects_list_split in objects_list_split_2:
-            sum_vec = numpy.sum(objects_list_split, axis=(1,2))
-            objects_list_split_normalised.append(objects_list_split / sum_vec[:, numpy.newaxis, numpy.newaxis])
-            
-    return grid_split, objects_list_split_normalised
+        Parameters
+        -------
+        :param grid: numpy.ndarray(), the x-axis of the objects
+        :param objects_list: a list of numpy.ndarray(), the objects in the sample
+        :param N_chunks: integer, the number of chunks to split each object into
 
-def divide_to_chunks(grid, objects_list, N_chunks):
-    """
-    The main function that divides the data into chuncks. The function takes as input the grid and the object list
-    and splits them into chunks according to N_chunks. The function is used to construct a multi-scale similarity measures.
-    The function does not assume that N_chunks can divide the data into equaly-sized chunks.
+        Returns
+        -------
+        :param grid_split: a list of numpy.ndarray(), a list containing the different parts of the split grid
+        :param objects_list_split_normalised: a list of numpy.ndarray(), a list of length N_chunks consisting of the 
+            objects_list for each chunk, after normalization
+        """
+        grid_split = numpy.array_split(grid, N_chunks)
+        objects_list_split = numpy.array_split(objects_list, N_chunks, axis=-1)
+        objects_list_split_normalised = []
+        for objects_list_chunk in objects_list_split:
+            sum_vec = numpy.sum(objects_list_chunk, axis=-1)
+            object_list_chunk_norm = objects_list_chunk / sum_vec[:, numpy.newaxis]
+            objects_list_split_normalised.append(object_list_chunk_norm)
+                
+        return grid_split, objects_list_split_normalised
 
-    @grid: the grid on which the objects are interpolated (the x axis of the information)
-    @objects_list: the list of objects with their measured features
-    @N_chunks: the number of chunks to which to divide the data
-    """
-    assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be either 1D or 2D"
+    def _divide_to_chunks_2D(self, grid, objects_list, N_chunks):
+        """Function divides the data into chunks according to N_chunks, and then normalizes each chunk to have a sum of one.
+        Function also splits the grid array into the same chunks. Function assumes that the grid is 2D and the object list 
+        is 3D.
 
-    if len(grid.shape) == 1:
-        return divide_to_chunks_1D(grid, objects_list, N_chunks)
-    if len(grid.shape) == 2:
-        return divide_to_chunks_2D(grid, objects_list, N_chunks)
+        Parameters
+        -------
+        :param grid: numpy.ndarray(), the x-axis of the objects
+        :param objects_list: a list of numpy.ndarray(), the objects in the sample
+        :param N_chunks: integer, the number of chunks to split each object into
 
-#######################################################################################################################
-################################################## GRAPH FUNCTIONS ####################################################
-#######################################################################################################################
+        Returns
+        -------
+        :param grid_split: a list of numpy.ndarray(), a list containing the different parts of the split grid
+        :param objects_list_split_normalised: a list of numpy.ndarray(), a list of length N_chunks consisting of the 
+            objects_list for each chunk, after normalization
+        """
+        grid_split = []
+        for grid_split_tmp in numpy.array_split(grid, N_chunks[0], axis=0):
+            grid_split += numpy.array_split(grid_split_tmp, N_chunks[1], axis=1)
+        
+        objects_list_split_normalised = []
+        objects_list_split_1 = numpy.array_split(objects_list, N_chunks[0], axis=1)
+        for objects_list_split_tmp in objects_list_split_1:
+            objects_list_split_2 = numpy.array_split(objects_list_split_tmp, N_chunks[1], axis=2)
+            for objects_list_split in objects_list_split_2:
+                sum_vec = numpy.sum(objects_list_split, axis=(1,2))
+                objects_list_split_normalised.append(objects_list_split / sum_vec[:, numpy.newaxis, numpy.newaxis])
+                
+        return grid_split, objects_list_split_normalised
 
-def return_MST_axis_ratio(distance_arr):
-    """
-    Function takes as an input a list that contains the distace of each object from the root of the graph.
-    Function measures the axis ratio of the MST, namely the helf-length of the tree divided by the half-width of the tree.
-    The width of the tree is calculated as the average width in every depth level, and the length is calculated 
-    as the average distance from the root.
+    def _divide_to_chunks(self, grid, objects_list, N_chunks):
+        """The main function that divides the data into chunks. It splits the grid and objects_list into chunks
+        according to N_chunks. The function does not assume that N_chunks can divide the data into equaly-sized chunks, 
+        but instead returns chunks of roughly similar size.
 
-    @distance_arr: a list that describes the distance of each node from the root of the tree, given 
-    in number of nodes that separate between them. Therefore, the list consists of integer values and its
-    size is similar to the length of the input data.
+        Parameters
+        -------
+        :param grid: numpy.ndarray(), the x-axis of the objects
+        :param objects_list: a list of numpy.ndarray(), the objects in the sample
+        :param N_chunks: integer, the number of chunks to split each object into
 
-    WARNING: this function can only be ran within the function: apply_MST_and_return_BFS_DFS_ordering
-    """
-    graph_half_length = numpy.average(distance_arr) 
-    g_unique, counts = numpy.unique(distance_arr, return_counts=True)
-    graph_half_width = numpy.average(counts) / 2.
-    mst_axis_ratio = graph_half_length / float(graph_half_width)
+        Returns
+        -------
+        :param grid_split: a list of numpy.ndarray(), a list containing the different parts of the split grid
+        :param objects_list_split_normalised: a list of numpy.ndarray(), a list of length N_chunks consisting of the 
+            objects_list for each chunk, after normalization
+        """
+        assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be either 1D or 2D"
 
-    return mst_axis_ratio
+        if len(grid.shape) == 1:
+            return self._divide_to_chunks_1D(grid, objects_list, N_chunks)
+        if len(grid.shape) == 2:
+            return self._divide_to_chunks_2D(grid, objects_list, N_chunks)
 
-def return_start_index_from_MST(graph):
-    """
-    Function takes as an input a graph (by networkx) and returns a suggested starting point for the graph.
-    The function uses "closeness centrality" to find the less central nose in the graph, which will serve as the starting index.
-    
-    @graph: networkx.classes.graph.Graph, the graph that represents the mininun spanning tree
-    """
-    centrality = nx.closeness_centrality(graph)
-    indices = numpy.fromiter(centrality.keys(), dtype=int)
-    centrality_measure = numpy.fromiter(centrality.values(), dtype=float)
-    start_index = indices[numpy.argmin(centrality_measure)]
 
-    return start_index
+    ################################################## GRAPH FUNCTIONS ####################################################
+    def _return_MST_axis_ratio(self, distance_arr):
+        """Function estimates the axis ratio of the MST that is described by the given distance array. The input distance 
+        array represents the distances of each node in the graph from the root of the graph (the starting point). 
+        Funciton calculates the axis ratio by dividing the half-length of the tree by the half-width.
+        The half-width is calculated as the average width in every depth level, and the half-length is calculated as the
+        average distance from the root.
 
-def apply_MST_and_return_MST_and_axis_ratio(distance_matrix, return_axis_ratio=True):
-    """
-    Function converts the distance matrix into a fully-conncted graph and calculates its minimum spanning tree (MST).
-    Function has an option to return the axis ratio of the resulting MST. 
+        Parameters
+        -------
+        :param distance_arr: list, a list that described the distance of each node from the root of the tree
 
-    @distance_matrix: 2D numpy array, the distance matrix to be converted into a minimum spanning tree.
-    @return_axis_ratio: boolean, whether or not to return the axis ratio of the resulting MST, default is True.
-    """
-    assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
-    assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
-    assert distance_matrix.shape[0] == distance_matrix.shape[1], "distance matrix must be NxN matrix"
-    assert (~numpy.isnan(distance_matrix)).all(), "distance matrix contains nan values"
-    assert (~numpy.isneginf(distance_matrix)).all(), "distance matrix contains negative infinite values"
-    assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
-    assert (distance_matrix.diagonal() == 0).all(), "distance matrix must contain zeros in its diagonal"
+        Returns
+        -------
+        :param mst_axis_ratio: float, the axis ratio of the MST
+        """
+        graph_half_length = numpy.average(distance_arr) 
+        g_unique, counts = numpy.unique(distance_arr, return_counts=True)
+        graph_half_width = numpy.average(counts) / 2.
+        mst_axis_ratio = float(graph_half_length) / float(graph_half_width)
 
-    min_span_dist_mat = minimum_spanning_tree(csr_matrix(distance_matrix)).toarray()
-    G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
-    if return_axis_ratio:
-        start_index = return_start_index_from_MST(G)
+        return mst_axis_ratio
+
+    def _return_start_index_from_MST(self, graph):
+        """Function returns the starting point of the sequence, which is defined as the least central node in the given graph.
+        The least central node in the graph is defined using the closeness centrality.
+        
+        Parameters
+        -------
+        :param graph: networkx.classes.graph.Graph(), the graph that represents the Mininun Spanning Tree
+
+        Returns
+        -------
+        :param start_index: integer, the index of the node found to be the starting point
+        """
+        centrality = nx.closeness_centrality(graph)
+        indices = numpy.fromiter(centrality.keys(), dtype=int)
+        centrality_measure = numpy.fromiter(centrality.values(), dtype=float)
+        start_index = indices[numpy.argmin(centrality_measure)]
+
+        return start_index
+
+    def _apply_MST_and_return_MST_and_axis_ratio(self, distance_matrix, return_axis_ratio=True):
+        """Function converts the distance matrix into a fully-conncted graph and calculates its Minimum Spanning Tree (MST).
+        Function has an option to return the axis ratio of the resulting MST. 
+
+        Parameters
+        -------
+        :param distance_matrix: numpy.ndarray(), the distance matrix that will be converted into an MST.
+        :param return_axis_ratio: boolean (default=True), whether to return the axis ratio of the resulting MST.
+
+        Returns
+        -------
+        :param G: networkx.classes.graph.Graph(), the graph that represents the resulting MST.
+        :param mst_axis_ratio (optional): float, the axis ratio of the resulting MST.
+        """
+        assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
+        assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
+        assert distance_matrix.shape[0] == distance_matrix.shape[1], "distance matrix must be NxN matrix"
+        assert (~numpy.isnan(distance_matrix)).all(), "distance matrix contains nan values"
+        assert (~numpy.isneginf(distance_matrix)).all(), "distance matrix contains negative infinite values"
+        assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
+        assert (distance_matrix.diagonal() == 0).all(), "distance matrix must contain zeros in its diagonal"
+
+        min_span_dist_mat = minimum_spanning_tree(csr_matrix(distance_matrix)).toarray()
+        G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
+        if return_axis_ratio:
+            start_index = self._return_start_index_from_MST(G)
+            distance_dict = nx.shortest_path_length(G, start_index)
+            distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
+            mst_axis_ratio = self._return_MST_axis_ratio(distance_arr)
+            return G, mst_axis_ratio
+        else:
+            return G
+
+    def _apply_MST_and_return_BFS_DFS_ordering(self, distance_matrix, start_index=None, return_axis_ratio=True, return_MST=True):
+        """Function converts the distance matrix into a fully-connected graph and calculates its minimum spanning tree (MST).
+        The function also returns two walks within the tree: BFS and DFS. The function also has an option to return the axis 
+        ratio of the resulting MST.
+
+        Parameters
+        -------
+        :param distance_matrix: numpy.ndarray(), the distance matrix that will be converted into an MST.
+        :param start_index: integer (default=None), the index in the matrix from which to start the BFS/DFS walk within the MST. 
+            If start_index==None, the function estimates the staring point using the closeness centrality measure.
+        :param return_axis_ratio: boolean (default=True), whether to return the axis ratio of the resulting MST.
+        :param return MST: boolean (default=True), whether to return the resulting MST.
+
+        Returns
+        -------
+        :param ordering_bfs: a list of integers, a list representing the indices of the nodes according to a BFS walk in the MST
+        :param ordering_dfs: a list of integers, a list representing the indices of the nodes according to a DFS walk in the MST
+        :param mst_axis_ratio (optional): float, the axis ratio of the resulting MST.
+        :param G (optional): networkx.classes.graph.Graph(), the graph that represents the resulting MST.
+        """
+        assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
+        assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
+        assert distance_matrix.shape[0] == distance_matrix.shape[1], "distance matrix must be NxN matrix"
+        assert (~numpy.isnan(distance_matrix)).all(), "distance matrix contains nan values"
+        assert (~numpy.isneginf(distance_matrix)).all(), "distance matrix contains negative infinite values"
+        assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
+        assert (distance_matrix.diagonal() == 0).all(), "distance matrix must contain zeros in its diagonal"
+
+        min_span_dist_mat = minimum_spanning_tree(csr_matrix(distance_matrix)).toarray()
+        G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
+        if start_index == None:
+            start_index = self._return_start_index_from_MST(G)
+        # DFS walk
+        ordering_dfs = numpy.fromiter(nx.dfs_preorder_nodes(G, start_index), dtype=int)
+        # BFS walk
         distance_dict = nx.shortest_path_length(G, start_index)
+        distance_inds = numpy.fromiter(distance_dict.keys(), dtype=int)
         distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
-        mst_axis_ratio = return_MST_axis_ratio(distance_arr)
-        return G, mst_axis_ratio
-    else:
-        return G
+        ordering_bfs = distance_inds[numpy.argsort(distance_arr)]
 
-def apply_MST_and_return_BFS_DFS_ordering(distance_matrix, start_index=None, return_axis_ratio=True, return_MST=True):
-    """
-    Function converts the distance matrix into a fully-connected graph and calculates its minimum spanning tree (MST).
-    The function also returns two walks within the tree: BFS and DFS.
-    The function also has an option to return the axis ratio of the resulting MST.
-
-    @distance_matrix: 2D numpy array, the distance matrix to be converted into a minimum spanning tree.
-    @start_index: the index in the matrix from which to start the BFS/DFS walk within the MST. 
-                  If not specified, the function calculates a "good" place to start from using closeness centrality measure.
-    @return_axis_ratio: boolean, whether or not to return the axis ratio of the resulting MST, default is True.
-    @return_MST: boolean, whether or not to return the MST itself, default is True.
-    """
-    assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
-    assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
-    assert distance_matrix.shape[0] == distance_matrix.shape[1], "distance matrix must be NxN matrix"
-    assert (~numpy.isnan(distance_matrix)).all(), "distance matrix contains nan values"
-    assert (~numpy.isneginf(distance_matrix)).all(), "distance matrix contains negative infinite values"
-    assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
-    assert (distance_matrix.diagonal() == 0).all(), "distance matrix must contain zeros in its diagonal"
-
-    min_span_dist_mat = minimum_spanning_tree(csr_matrix(distance_matrix)).toarray()
-    G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
-    if start_index == None:
-        start_index = return_start_index_from_MST(G)
-    # dfs
-    ordering_dfs = numpy.fromiter(nx.dfs_preorder_nodes(G, start_index), dtype=int)
-    # bfs
-    distance_dict = nx.shortest_path_length(G, start_index)
-    distance_inds = numpy.fromiter(distance_dict.keys(), dtype=int)
-    distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
-    ordering_bfs = distance_inds[numpy.argsort(distance_arr)]
-
-    if return_axis_ratio and return_MST:
-        mst_axis_ratio = return_MST_axis_ratio(distance_arr)
-        return ordering_bfs, ordering_dfs, mst_axis_ratio, G
-    elif return_axis_ratio:
-        mst_axis_ratio = return_MST_axis_ratio(distance_arr)
-        return ordering_bfs, ordering_dfs, mst_axis_ratio
-    else:
-        return ordering_bfs, ordering_dfs
+        if return_axis_ratio and return_MST:
+            mst_axis_ratio = self._return_MST_axis_ratio(distance_arr)
+            return ordering_bfs, ordering_dfs, mst_axis_ratio, G
+        elif return_axis_ratio:
+            mst_axis_ratio = self._return_MST_axis_ratio(distance_arr)
+            return ordering_bfs, ordering_dfs, mst_axis_ratio
+        else:
+            return ordering_bfs, ordering_dfs
 
 #######################################################################################################################
 ######################################## PROXIMIY/DISTANCE matrix conversion ##########################################
