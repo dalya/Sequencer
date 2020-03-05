@@ -103,6 +103,9 @@ class Sequencer(object):
                 scale_list = [scale_list_for_estimator] * len(self.estimator_list)
                 self.scale_list = scale_list
 
+        # set to None the parameters that are calculated during the execute function
+        self.weighted_axis_ratio_and_sequence_dictionary = None
+
 
     def execute(self, outpath, to_print_progress=True, to_calculate_distance_matrices=True, to_save_distance_matrices=True, \
         distance_matrices_inpath=None, to_save_axis_ratios=True, to_average_N_best_estimators=False, number_of_best_estimators=None, \
@@ -323,36 +326,187 @@ class Sequencer(object):
         return self.final_mst_axis_ratio, self.final_sequence
 
 
-#######################################################################################################################
-###################################################### DATA I/O #######################################################
-#######################################################################################################################
+    def return_axis_ratios_and_sequences_per_chunk(self, estimator_name, scale):
+        """Function returns the intermediate axis ratios and sequences obtained during the calculation of the final sequence.
+        For each distance metric and scale, the sequencer divided each object into different chunks (parts), and estimated 
+        its corresponding sequence and axis ratio. This funciton returns a list of these axis ratios and sequences.
 
-def load_distance_matrices_from_path(path, scale_list, estimator_list):
-    """
-    function loads the distance matrices object into memory and checks if this object correspnds to the scale list and estimator list given
-    """
-    input_file = open(path, "rb")
-    distance_matrix_dictionary = pickle.load(input_file)
-    input_file.close()
+        Parameters
+        ----------
+        :param estimator_name: string, the distance metric for which to return the list of axis ratios and sequences.
 
-    distance_matrix_dictionary_small = {}
-    for estimator_index, estimator_value in enumerate(estimator_list):
-        scale_list_for_estimator = scale_list[estimator_index]
-        for scale_value in scale_list_for_estimator:
-            if (estimator_value, scale_value) not in list(distance_matrix_dictionary.keys()):
-                print("the scale list does not correspond to the distance matrices loaded")
-                return 0
-            else:
-                distance_matrix_dictionary_small[(estimator_value, scale_value)] = distance_matrix_dictionary[(estimator_value, scale_value)]
-    return distance_matrix_dictionary_small
+        :param scale: integer, the scale for which toe return the list of axis ratios and sequences.
 
-def dump_distance_matrices_to_path(path, distance_matrix_dictionary):
-    """
-    function dumps the distance matrix dictionary to the given path, for future use
-    """
-    output_file = open(path, "wb")
-    pickle.dump(distance_matrix_dictionary, output_file)
-    output_file.close()
+
+        Returns
+        -------
+        :param axis_ratio_list: a list of float values, the list of axis ratios obtained for each of the chunks for the given 
+            distance metric and scale.
+
+        :param sequence_list: a list of lists, the list of sequences calculated for each of the chunks for the given 
+            distance metric and scale.
+        """
+        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (estimator_name in self.estimator_list), "the required estimator is not included in the esitmator list"
+        for i, estimator_value in enumerate(estimator_list):
+            if estimator_value == estimator_name:
+                scale_list_for_estimator = self.scale_list[i]
+                assert (scale in scale_list_for_estimator), "the required scale is not included in the scale list for the given estimator"
+
+        axis_ratio_list, sequence_list = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale, "chunks")]
+
+        return axis_ratio_list, sequence_list
+
+
+    def return_axis_ratio_of_weighted_products(self, estimator_name, scale):
+        """Function returns the intermediate axis ratios obtained in the second stage of the code. For each distance metric and
+        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an axis ratio. 
+
+        Parameters
+        ----------
+        :param estimator_name: string, the distance metric for which to return the list of axis ratios and sequences.
+
+        :param scale: integer, the scale for which toe return the list of axis ratios and sequences.
+
+
+        Returns
+        -------
+        :param axis_ratio: a float, the axis ratio that corresponds to the given metric and scale.
+        """
+        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (estimator_name in self.estimator_list), "the required estimator is not included in the esitmator list"
+        for i, estimator_value in enumerate(estimator_list):
+            if estimator_value == estimator_name:
+                scale_list_for_estimator = self.scale_list[i]
+                assert (scale in scale_list_for_estimator), "the required scale is not included in the scale list for the given estimator"   
+
+        axis_ratio, sequence = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale, "weighted")]
+
+        return axis_ratio
+
+
+    def return_sequence_of_weighted_products(self, estimator_name, scale):
+        """Function returns the intermediate sequence obtained in the second stage of the code. For each distance metric and
+        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an axis ratio. 
+
+        Parameters
+        ----------
+        :param estimator_name: string, the distance metric for which to return the list of axis ratios and sequences.
+
+        :param scale: integer, the scale for which toe return the list of axis ratios and sequences.
+
+        Returns
+        -------
+        :param sequence: a list of integers, the sequence that corresponds to the given metric and scale.
+        """
+        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (estimator_name in self.estimator_list), "the required estimator is not included in the esitmator list"
+        for i, estimator_value in enumerate(estimator_list):
+            if estimator_value == estimator_name:
+                scale_list_for_estimator = self.scale_list[i]
+                assert (scale in scale_list_for_estimator), "the required scale is not included in the scale list for the given estimator"   
+
+        axis_ratio, sequence = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale, "weighted")]
+
+        return sequence
+
+
+    def return_axis_ratio_of_weighted_products_all_metrics_and_scales(self):
+        """Function returns the intermediate axis ratios obtained in the second stage of the code. For each distance metric and
+        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an axis ratio. 
+        (*) This function returns a list of axis ratios that corresponds to all the different metrics and scales. 
+        (*) If the user is interested in a particular metric and scale, then one can use the function: return_axis_ratio_of_weighted_products.
+
+        Returns
+        -------
+        :param estimator_list: a list of strings, the distance metrics for which the axis ratios were calculated.
+        :param scale_list: a list of integers, the scales for which the axis ratios were calculated.
+        :param axis_ratio_list: a list of floats, the axis ratios that corresponds to every metric and scale.
+        """
+        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+
+        estimator_list = []
+        scale_list = []
+        axis_ratio_list = []
+        for estimator_index, estimator_value in enumerate(self.estimator_list):
+            scale_list_for_estimator = self.scale_list[estimator_index]
+            for scale_index, scale_value in enumerate(scale_list_for_estimator):
+                axis_ratio, sequence = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_value, scale_value, "weighted")]
+
+                estimator_list.append(estimator_value)
+                scale_list.append(scale_value)
+                axis_ratio_list.append(axis_ratio)
+
+        return estimator_list, scale_list, axis_ratio_list
+
+
+    def return_sequence_of_weighted_products_all_metrics_and_scales(self):
+        """Function returns the intermediate sequences obtained in the second stage of the code. For each distance metric and
+        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an axis ratio. 
+        (*) This function returns a list of sequences that corresponds to all the different metrics and scales. 
+        (*) If the user is interested in a particular metric and scale, then one can use the function: return_sequence_of_weighted_products.
+
+        Returns
+        -------
+        :param estimator_list: a list of strings, the distance metrics for which the axis ratios were calculated.
+        :param scale_list: a list of integers, the scales for which the axis ratios were calculated.
+        :param sequence_list: a list of lists, the sequences that corresponds to every metric and scale.
+        """
+        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+
+        estimator_list = []
+        scale_list = []
+        sequence_list = []
+        for estimator_index, estimator_value in enumerate(self.estimator_list):
+            scale_list_for_estimator = self.scale_list[estimator_index]
+            for scale_index, scale_value in enumerate(scale_list_for_estimator):
+                axis_ratio, sequence = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_value, scale_value, "weighted")]
+
+                estimator_list.append(estimator_value)
+                scale_list.append(scale_value)
+                sequence_list.append(sequence)
+
+        return estimator_list, scale_list, sequence_list
+
+    #######################################################################################################################
+    ################################################ PRIVATE FUNCTIONS ####################################################
+    #######################################################################################################################
+
+    
+    ###################################################### DATA I/O #######################################################
+
+    def _load_distance_matrices_from_path(self):
+        """Funciton loads the distance matrices into memory from the distance matrix input file.
+
+        This is an internal function that is used only in a case where the distance matrices per metric and scale were already
+        computed during a previous run, and were saved. In such a case, the user can choose to load the precomputed matrices
+        instead of calculating them again. This can save a lot of execution time.
+
+        Returns
+        -------
+        :param distance_matrix_dictionary: a dictionary where each key is a tuple (estimator_name, scale_value), and the value 
+            is a list of distance matrices computed for each chunk of the data. 
+        """
+        input_file = open(path, "rb")
+        distance_matrix_dictionary_saved = pickle.load(self.distance_matrices_inpath)
+        input_file.close()
+
+        distance_matrix_dictionary = {}
+        for estimator_index, estimator_value in enumerate(self.estimator_list):
+
+            scale_list_for_estimator = self.scale_list[estimator_index]
+            for scale_value in scale_list_for_estimator:
+                assert ((estimator_value, scale_value) in list(distance_matrix_dictionary_saved.keys())), "the list of saved distance matrices does not include the required metrics and scales by Sequencer.execute"
+                distance_matrix_dictionary[(estimator_value, scale_value)] = distance_matrix_dictionary_saved[(estimator_value, scale_value)]
+
+        return distance_matrix_dictionary
+
+    def _dump_distance_matrices_to_path(self, distance_matrix_dictionary):
+        """Function saves the provided distance matrix dictionary into a file.
+        """
+        output_file = open(self.distance_matrices_outpath, "wb")
+        pickle.dump(distance_matrix_dictionary, output_file)
+        output_file.close()
 
 #######################################################################################################################
 ################################################# Distance measures ###################################################
