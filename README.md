@@ -74,12 +74,15 @@ To execute the `Sequencer` obejct, we needed to define `output_directory_path`, 
 ### Shuffled image rows
 The Sequencer reorders the objects in the input dataset according to a detected sequence, if such sequence exists in the dataset. A good example of a perfect one-dimensional sequence is a natural image: the rows within a natural image form a well-defined sequence. Therefore, we can shuffle the rows in a natural image, and apply the Sequencer to the shuffled dataset. 
 The figure below shows the result when applying the Sequencer to a natural image: the left panel shows the original image, the middle panel shows the same image, but after we have shuffled its rows. The shuffled image serves as the input dataset to the Sequencer algorithm. The right panel shows the resulting sequence detected by the Sequencer. Clearly, the Sequencer successfully detected the sequence in the data, and ordered the rows correctly:
+
 ![](images/natural_image_example.png)
 
 ### Simulated dataset with a sequence on small scales
-The following figure shows an example of a simulated dataset with a clear one-dimensional sequence. The top left panel shows the input dataset, where each rows is a different object and the color-coding represents the relative intensity in each of its features. The objects are constructed to have both small-scale and large-scale fluctuations, and some added noise. In addition, the objects consist of several narrow pulses which form a clear one-dimensional sequence. The top right panel shows the output by the Sequencer. The Sequencer successfully identified the one-dimensional trend in narrow pulse location. The bottom panel shows the best one-dimensional embedding by tSNE and UMAP. One can see that the output of both of the algorithms is driven by the large-scale fluctuations. This result illustrates thattSNE and UMAP are not optimized to find the most elon-gated manifold in the dataset if it is not distributed over thefull scale of the data.
+The following figure shows an example of a simulated dataset with a clear one-dimensional sequence. The top left panel shows the input dataset, where each row is a different object and the color-coding represents the relative intensity in each of its pixels. The objects are constructed to have both small-scale and large-scale fluctuations, and some added noise. In addition, the objects consist of several narrow pulses which form a clear one-dimensional sequence. The top right panel shows the output by the Sequencer. The Sequencer successfully identified the one-dimensional trend in narrow pulse location. The bottom panel shows the best one-dimensional embedding by tSNE and UMAP. One can see that the output of both of the algorithms is driven by the large-scale fluctuations. This result illustrates thattSNE and UMAP are not optimized to find the most elon-gated manifold in the dataset if it is not distributed over thefull scale of the data.
+
 ![](images/synthetic_data_seq_box_plots.png)
 
+Users can further examine this example in the Jupyter notebook: `comparison_with_tsne_and_umap.ipynb` in the examples directory.
 
 ## Citation 
 XXX remains to be written
