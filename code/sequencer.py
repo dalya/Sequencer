@@ -351,9 +351,9 @@ class Sequencer(object):
         :param sequence_list: a list of lists, the list of sequences calculated for each of the chunks for the given 
             distance metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
         assert (estimator_name in self.estimator_list), "the required estimator is not included in the esitmator list"
-        for i, estimator_value in enumerate(estimator_list):
+        for i, estimator_value in enumerate(self.estimator_list):
             if estimator_value == estimator_name:
                 scale_list_for_estimator = self.scale_list[i]
                 assert (scale in scale_list_for_estimator), "the required scale is not included in the scale list for the given estimator"
@@ -378,9 +378,9 @@ class Sequencer(object):
         -------
         :param axis_ratio: a float, the axis ratio that corresponds to the given metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
         assert (estimator_name in self.estimator_list), "the required estimator is not included in the esitmator list"
-        for i, estimator_value in enumerate(estimator_list):
+        for i, estimator_value in enumerate(self.estimator_list):
             if estimator_value == estimator_name:
                 scale_list_for_estimator = self.scale_list[i]
                 assert (scale in scale_list_for_estimator), "the required scale is not included in the scale list for the given estimator"   
@@ -404,9 +404,9 @@ class Sequencer(object):
         -------
         :param sequence: a list of integers, the sequence that corresponds to the given metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
         assert (estimator_name in self.estimator_list), "the required estimator is not included in the esitmator list"
-        for i, estimator_value in enumerate(estimator_list):
+        for i, estimator_value in enumerate(self.estimator_list):
             if estimator_value == estimator_name:
                 scale_list_for_estimator = self.scale_list[i]
                 assert (scale in scale_list_for_estimator), "the required scale is not included in the scale list for the given estimator"   
@@ -428,7 +428,7 @@ class Sequencer(object):
         :param scale_list: a list of integers, the scales for which the axis ratios were calculated.
         :param axis_ratio_list: a list of floats, the axis ratios that corresponds to every metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
 
         estimator_list = []
         scale_list = []
@@ -457,7 +457,7 @@ class Sequencer(object):
         :param scale_list: a list of integers, the scales for which the axis ratios were calculated.
         :param sequence_list: a list of lists, the sequences that corresponds to every metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary == None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
 
         estimator_list = []
         scale_list = []
