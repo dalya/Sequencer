@@ -491,8 +491,8 @@ class Sequencer(object):
         :param distance_matrix_dictionary: a dictionary where each key is a tuple (estimator_name, scale_value), and the value 
             is a list of distance matrices computed for each chunk of the data. 
         """
-        input_file = open(path, "rb")
-        distance_matrix_dictionary_saved = pickle.load(self.distance_matrices_inpath)
+        input_file = open(self.distance_matrices_inpath, "rb")
+        distance_matrix_dictionary_saved = pickle.load(input_file)
         input_file.close()
 
         distance_matrix_dictionary = {}
