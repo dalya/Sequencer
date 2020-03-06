@@ -71,9 +71,15 @@ This means that for each metric, the Sequencer will examine four different scale
 To execute the `Sequencer` obejct, we needed to define `output_directory_path`, which is a path of a directory to which different Sequencer products will be saved. The final output of the function consists of: (1) `final_axis_ratio`: the axis ratio of the resulting sequence. An axis ratio that is close to 1 suggests no clear sequence in the data. An axis ratio close to N, where N is the number of objects in the sample, suggests that the Sequencer detected a significant sequence in the data. (2) `final_sequence`: the resulting sequence. This is an array that contains the relative order of the different objects in the sample, such that they form the detected sequence.
 
 ## Performance and Examples
-The Sequencer reorders the objects in the input dataset according to a sequence, if such sequence exists in the dataset. A good example of a perfect one-dimensional sequence is a natural image: the rows within a natural image form a well-defined sequence. Therefore, we can shuffle the rows in a natural image, and apply the Sequencer to the shuffled dataset. 
-The figure below shows the result when applying the Sequencer to a natural image: the left panel shows the original image, the middle panel shows the same image, but after we have shuffled its rows. The shuffled image serves as the input dataset to the Sequencer algorithm. The right panel shows the resulting sequence detected by the Sequencer. Clearly, the Sequencer detected the sequence in the rows in the data:
-![](https://github.com/dalya/Sequencer/tree/master/images/natural_image_example.png)
+### Shuffled image rows
+The Sequencer reorders the objects in the input dataset according to a detected sequence, if such sequence exists in the dataset. A good example of a perfect one-dimensional sequence is a natural image: the rows within a natural image form a well-defined sequence. Therefore, we can shuffle the rows in a natural image, and apply the Sequencer to the shuffled dataset. 
+The figure below shows the result when applying the Sequencer to a natural image: the left panel shows the original image, the middle panel shows the same image, but after we have shuffled its rows. The shuffled image serves as the input dataset to the Sequencer algorithm. The right panel shows the resulting sequence detected by the Sequencer. Clearly, the Sequencer successfully detected the sequence in the data, and ordered the rows correctly:
+![](images/natural_image_example.png)
+
+### Simulated dataset with a sequence on small scales
+The following figure shows an example of a simulated dataset with a clear one-dimensional sequence. The top left panel shows the input dataset, where each rows is a different object and the color-coding represents the relative intensity in each of its features. The objects are constructed to have both small-scale and large-scale fluctuations, and some added noise. In addition, the objects consist of several narrow pulses which form a clear one-dimensional sequence. The top right panel shows the output by the Sequencer. The Sequencer successfully identified the one-dimensional trend in narrow pulse location. The bottom panel shows the best one-dimensional embedding by tSNE and UMAP. One can see that the output of both of the algorithms is driven by the large-scale fluctuations. This result illustrates thattSNE and UMAP are not optimized to find the most elon-gated manifold in the dataset if it is not distributed over thefull scale of the data.
+![](images/synthetic_data_seq_box_plots.png)
+
 
 ## Citation 
 XXX remains to be written
