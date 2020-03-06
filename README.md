@@ -73,8 +73,7 @@ To execute the `Sequencer` obejct, we needed to define `output_directory_path`, 
 ## Performance and Examples
 The Sequencer reorders the objects in the input dataset according to a sequence, if such sequence exists in the dataset. A good example of a perfect one-dimensional sequence is a natural image: the rows within a natural image form a well-defined sequence. Therefore, we can shuffle the rows in a natural image, and apply the Sequencer to the shuffled dataset. 
 The figure below shows the result when applying the Sequencer to a natural image: the left panel shows the original image, the middle panel shows the same image, but after we have shuffled its rows. The shuffled image serves as the input dataset to the Sequencer algorithm. The right panel shows the resulting sequence detected by the Sequencer. Clearly, the Sequencer detected the sequence in the rows in the data:
-![alt text](https://github.com/dalya/Sequencer/tree/master/images/natural_image_example.png "Sequencer Example #1")
-
+![](https://github.com/dalya/Sequencer/tree/master/images/natural_image_example.png)
 
 ## Citation 
 XXX remains to be written
