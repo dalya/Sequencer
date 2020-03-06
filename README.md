@@ -71,7 +71,10 @@ This means that for each metric, the Sequencer will examine four different scale
 To execute the `Sequencer` obejct, we needed to define `output_directory_path`, which is a path of a directory to which different Sequencer products will be saved. The final output of the function consists of: (1) `final_axis_ratio`: the axis ratio of the resulting sequence. An axis ratio that is close to 1 suggests no clear sequence in the data. An axis ratio close to N, where N is the number of objects in the sample, suggests that the Sequencer detected a significant sequence in the data. (2) `final_sequence`: the resulting sequence. This is an array that contains the relative order of the different objects in the sample, such that they form the detected sequence.
 
 ## Performance and Examples
-The Sequencer reorders the objects in the input dataset according to a sequence, if such sequence exists in the dataset. A good example of a perfect one-dimensional sequence is a natural image: the rows within a natural image form a well-defined sequence. Therefore, we can shuffle the rows in a natural image, and apply the Sequencer to the shuffled dataset. Below, 
+The Sequencer reorders the objects in the input dataset according to a sequence, if such sequence exists in the dataset. A good example of a perfect one-dimensional sequence is a natural image: the rows within a natural image form a well-defined sequence. Therefore, we can shuffle the rows in a natural image, and apply the Sequencer to the shuffled dataset. 
+The figure below shows the result when applying the Sequencer to a natural image: the left panel shows the original image, the middle panel shows the same image, but after we have shuffled its rows. The shuffled image serves as the input dataset to the Sequencer algorithm. The right panel shows the resulting sequence detected by the Sequencer. Clearly, the Sequencer detected the sequence in the rows in the data:
+![alt text](https://github.com/dalya/Sequencer/tree/master/images/natural_image_example.png "Sequencer Example #1")
+
 
 ## Citation 
 XXX remains to be written
