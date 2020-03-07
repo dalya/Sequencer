@@ -506,3 +506,14 @@ calculating the distance matrices for estimator: L2, scale: 2
 finished calculating this distance matrix list, it took: 0.17214107513427734 seconds 
 calculating the distance matrices for estimator: L2, scale: 4
 finished calculating this distance matrix list, it took: 0.3147408962249756 seconds 
+started the run
+calculating the distance matrices for estimator: L2, scale: 1
+finished calculating this distance matrix list, it took: 0.05329585075378418 seconds 
+calculating the distance matrices for estimator: L2, scale: 2
+finished calculating this distance matrix list, it took: 0.0371091365814209 seconds 
+calculating the distance matrices for estimator: L2, scale: 5
+finished calculating this distance matrix list, it took: 0.07747697830200195 seconds 
+calculating the distance matrices for estimator: L2, scale: 10
+finished calculating this distance matrix list, it took: 0.14776611328125 seconds 
+calculating the distance matrices for estimator: L2, scale: 20
+finished calculating this distance matrix list, it took: 0.32308506965637207 seconds 
