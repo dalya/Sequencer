@@ -96,11 +96,10 @@ class Sequencer(object):
                 length_of_object = len(objects_list[0])
                 if length_of_object > 20:
                     maximal_scale_size = length_of_object / 20.
-                    scale_list_for_estimator = list(2**numpy.arange(0, numpy.log2(maximal_scale_size)))
+                    scale_list_for_estimator = list((2**numpy.arange(0, numpy.log2(maximal_scale_size))).astype(numpy.int))
                 else:
                     scale_list_for_estimator = [1]
                 scale_list = [scale_list_for_estimator] * len(self.estimator_list)
-
                 self.scale_list = scale_list
 
             else: # len(grid.shape) == 2:
