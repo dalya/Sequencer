@@ -24,7 +24,7 @@ import distance_metrics
 ##  Sequencer Class                                                                                                  ##
 #######################################################################################################################
 
-class Sequencer(object):
+class sequencer(object):
     """An algorithm that detects one-dimensional trends (sequences) in complex datasets. To do so, To do so, it 
     reorders objects within a set to produce the most elongated manifold describing their similarities which are 
     measured in a multi-scale manner and using a collection of metrics. 

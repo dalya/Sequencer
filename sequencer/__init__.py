@@ -1,4 +1,4 @@
 """
-Earth Mover's Distance in Python
+Sequencer code in python
 """
-from sequencer import Sequencer
+from sequencer import sequencer
