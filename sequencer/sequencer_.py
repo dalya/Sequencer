@@ -176,6 +176,10 @@ class Sequencer(object):
 
         assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(self.scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
         assert numpy.fromiter([estimator_value in ['EMD', 'energy', 'KL', 'L2'] for estimator_value in self.estimator_list], dtype=bool).all(), "estimators must be EMD, energy, KL or L2"
+        if len(self.grid.shape) == 2:
+            assert ('EMD' not in self.estimator_list), "EMD cannot be applied to two-dimensional objects"
+            assert ('energy' not in self.estimator_list), "Energy distance cannot be applied to two-dimensional objects"
+
         assert len(self.scale_list) == len(self.estimator_list), "the length of scale_list must equal to the length of estimator_list"
         for scale_value in self.scale_list:
             scale_shape = numpy.array(scale_value).shape
@@ -624,6 +628,8 @@ class Sequencer(object):
         objects_list_split_normalised = []
         for objects_list_chunk in objects_list_split:
             sum_vec = numpy.sum(objects_list_chunk, axis=-1)
+            for sum_val in sum_vec:
+                assert (sum_val > 0), "during the splitting into chunks, a chunk resulted in a negative or zero sum, which means that the chunk cannot be normalized. The user should consider adding an offset to all the objects"
             object_list_chunk_norm = objects_list_chunk / sum_vec[:, numpy.newaxis]
             objects_list_split_normalised.append(object_list_chunk_norm)
                 
@@ -656,6 +662,8 @@ class Sequencer(object):
             objects_list_split_2 = numpy.array_split(objects_list_split_tmp, N_chunks[1], axis=2)
             for objects_list_split in objects_list_split_2:
                 sum_vec = numpy.sum(objects_list_split, axis=(1,2))
+                for sum_val in sum_vec:
+                    assert (sum_val > 0), "during the splitting into chunks, a chunk resulted in a negative or zero sum, which means that the chunk cannot be normalized. The user should consider adding an offset to all the objects"
                 objects_list_split_normalised.append(objects_list_split / sum_vec[:, numpy.newaxis, numpy.newaxis])
                 
         return grid_split, objects_list_split_normalised
