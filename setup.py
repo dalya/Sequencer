@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="TheSequencer",
-    version="0.0.1",
+    version="0.0.2",
     description="An algorithm that detects one-dimensional sequences in complex datasets",
     long_description=long_description,
     long_description_content_type="text/markdown",
