@@ -28,7 +28,44 @@ To run the Jupyter notebooks in the examples directory, and to compare the Seque
 * umap 0.3.9 (to run UMAP; https://github.com/lmcinnes/umap)
 
 ## How to install the Sequencer 
-XXX remains to be written
+
+### Using PyPI:
+Assuming you have installed numpy, scipy, and networkx, then using PyPI install:
+```
+pip install TheSequencer
+```
+If you need to install the required packages, then we suggest to install them manually using anaconda:
+```
+conda install numpy scipy
+conda install networkx
+pip install TheSequencer
+```
+If you also want to run the Jupyter notebooks in the examples directory, then install the following:
+```
+conda install numpy scipy
+conda install networkx
+conda install matplotlib
+conda install scikit-learn
+conda install -c conda-forge umap-learn
+pip install TheSequencer
+```
+
+### Manual installation:
+For a manual installation:
+```
+wget https://github.com/dalya/Sequencer/archive/master.zip
+unzip master.zip
+rm master.zip
+cd Sequencer-master/
+```
+Install the requirements:
+```
+sudo pip install -r requirements.txt
+```
+Install the package:
+```
+python setup.py install
+```
 
 ## How to use the Sequencer
 The examples directory consists of several Jupyter notebooks showing how to use the Sequencer. New users are encoraged to start with the notebook `basic_sequencer_functionalities.ipynb`, which explains the basic functionalities of the Sequencer.
