@@ -1,4 +1,4 @@
 """
 Sequencer code in python
 """
-from sequencer import sequencer
+from .sequencer_ import Sequencer

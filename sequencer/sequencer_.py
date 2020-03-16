@@ -18,13 +18,13 @@ from scipy.interpolate import interp1d
 from joblib import Parallel, delayed, dump, load
 import multiprocessing
 
-import distance_metrics
+from sequencer.distance_metrics import return_emd_mat_brute_force, return_energy_mat, return_kl_mat, return_L2_mat
 
 #######################################################################################################################
 ##  Sequencer Class                                                                                                  ##
 #######################################################################################################################
 
-class sequencer(object):
+class Sequencer(object):
     """An algorithm that detects one-dimensional trends (sequences) in complex datasets. To do so, To do so, it 
     reorders objects within a set to produce the most elongated manifold describing their similarities which are 
     measured in a multi-scale manner and using a collection of metrics. 
@@ -565,16 +565,16 @@ class sequencer(object):
             grid = load(grid_filename_memmap, mmap_mode='r')
 
         if estimator == "EMD":
-            distance_matrix = distance_metrics.return_emd_mat_brute_force(grid, objects_list, self.to_use_parallelization)
+            distance_matrix = return_emd_mat_brute_force(grid, objects_list, self.to_use_parallelization)
 
         if estimator == "energy":
-            distance_matrix = distance_metrics.return_energy_mat(grid, objects_list, self.to_use_parallelization)
+            distance_matrix = return_energy_mat(grid, objects_list, self.to_use_parallelization)
 
         if estimator == "KL":
-            distance_matrix = distance_metrics.return_kl_mat(objects_list, self.to_use_parallelization)
+            distance_matrix = return_kl_mat(objects_list, self.to_use_parallelization)
 
         if estimator == "L2":
-            distance_matrix = distance_metrics.return_L2_mat(objects_list, self.to_use_parallelization)
+            distance_matrix = return_L2_mat(objects_list, self.to_use_parallelization)
 
         return distance_matrix
 
