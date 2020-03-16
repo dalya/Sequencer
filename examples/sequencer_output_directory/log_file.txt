@@ -673,3 +673,10 @@ calculating the distance matrices for estimator: L2, scale: 10
 finished calculating this distance matrix list, it took: 0.014821052551269531 seconds 
 started the run
 started the run
+started the run
+calculating the distance matrices for estimator: EMD, scale: 1
+finished calculating this distance matrix list, it took: 0.02500009536743164 seconds 
+calculating the distance matrices for estimator: energy, scale: 1
+finished calculating this distance matrix list, it took: 0.03751087188720703 seconds 
+calculating the distance matrices for estimator: L2, scale: 1
+finished calculating this distance matrix list, it took: 0.0017080307006835938 seconds 
