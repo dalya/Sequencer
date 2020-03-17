@@ -108,13 +108,13 @@ class Sequencer(object):
                 self.scale_list = scale_list
 
         # set to None the parameters that are calculated during the execute function
-        self.weighted_axis_ratio_and_sequence_dictionary = None
+        self.weighted_elongation_and_sequence_dictionary = None
 
 
     def execute(self, outpath, to_print_progress=True, to_calculate_distance_matrices=True, to_save_distance_matrices=True, \
-        distance_matrices_inpath=None, to_save_axis_ratios=True, to_average_N_best_estimators=False, number_of_best_estimators=None, \
+        distance_matrices_inpath=None, to_save_elongations=True, to_average_N_best_estimators=False, number_of_best_estimators=None, \
         to_use_parallelization=False):
-        """Main function of the sequencer that applies the algorithm to the data, and returns the best sequence and its axis ratio.
+        """Main function of the sequencer that applies the algorithm to the data, and returns the best sequence and its elongation.
         (*) The function can save many intermediate products, such as the distance matrices for each estimator and scale. The user is 
         encoraged to save these products, since they can be used later to reduce dramatically the computation time. 
         (*) The function also allows the user to perform the majority vote using the N best estimators, instead of using all of 
@@ -139,13 +139,13 @@ class Sequencer(object):
             and load them from the given path. This can be done by setting to_calculate_distance_matrices=False and providing the 
             input path of the distance matrices.
 
-        :param to_save_axis_ratios: boolean (default=True), whether to save the derived axis ratios for each estimator and scale. 
-            For each scale, the function will also save the derived axis ratios of each part (chunk) into which the objects are 
+        :param to_save_elongations: boolean (default=True), whether to save the derived elongations for each estimator and scale. 
+            For each scale, the function will also save the derived elongations of each part (chunk) into which the objects are 
             split into. These values can be useful to map the important metrics and scales of the problem.
 
         :param to_average_N_best_estimators: boolean (default=False), whether to consider only N best metrics + scales when 
             constructing the final sequence. If to_average_N_best_estimators=True, the function will perform a majority vote
-            only considering the N estimators (metrics + scales) with the highest axis ratios.
+            only considering the N estimators (metrics + scales) with the highest elongations.
 
         :param number_of_best_estimators: integer (default=None), the number of estimators to consider in the majority vote. 
             If to_average_N_best_estimators=True, then the user must provide an integer number. 
@@ -154,9 +154,9 @@ class Sequencer(object):
 
         Returns
         -------
-        :param final_mst_axis_ratio: float, the final axis ratio of the detected sequence. 
+        :param final_mst_elongation: float, the final elongation of the detected sequence. 
             This is obtained after populating the separate sequences for the different metrics+scales, averaged according to 
-            their respective axis ratios. See the paper for additional details.
+            their respective elongations. See the paper for additional details.
         :param final_sequence: numpy.ndarray of integers, the final detected sequence. 
         """
         N_obj = len(self.objects_list)
@@ -208,7 +208,7 @@ class Sequencer(object):
         self.to_calculate_distance_matrices = to_calculate_distance_matrices
         self.to_save_distance_matrices = to_save_distance_matrices
         self.distance_matrices_inpath = distance_matrices_inpath
-        self.to_save_axis_ratios = to_save_axis_ratios
+        self.to_save_elongations = to_save_elongations
         self.to_average_N_best_estimators = to_average_N_best_estimators
         self.number_of_best_estimators = number_of_best_estimators
         self.to_use_parallelization = to_use_parallelization
@@ -226,7 +226,7 @@ class Sequencer(object):
         ######################################################################################################## 
         self.log_file_outpath = "%s/log_file.txt" % self.outpath
         self.distance_matrices_outpath = "%s/distance_matrices.pkl" % self.outpath
-        self.axis_ratios_outpath = "%s/axis_ratios.pkl" % self.outpath
+        self.elongations_outpath = "%s/elongations.pkl" % self.outpath
         self.weighted_distance_matrix_outpath = "%s/weighted_distance_matrix.pkl" % self.outpath
         self.sparse_distance_matrix_outpath = "%s/sparse_distance_matrix.pkl" % self.outpath
         self.final_products_outpath = "%s/final_products.pkl" % self.outpath
@@ -251,10 +251,10 @@ class Sequencer(object):
 
         ########################################################################################################
         ######### STEP 2: order the spectra based on the different distance matrices, and measure    ###########
-        #########         weights using the MST axis ratios.                                         ###########
+        #########         weights using the MST elongations.                                         ###########
         #########         Produce weighted distance matrix per scale and estimator.                  ###########    
         ######################################################################################################## 
-        self.weighted_axis_ratio_and_sequence_dictionary = {}
+        self.weighted_elongation_and_sequence_dictionary = {}
         # the following lists will be used in STEP 3 for the proximity matrices
         MST_list = []
         weight_list = []
@@ -270,24 +270,24 @@ class Sequencer(object):
                     print("in estimator: %s, scale: %s" % (estimator_name, scale_value))
 
                 distance_matrix_list = distance_matrix_dictionary[(estimator_name, scale_value)]
-                weighted_distance_matrix, ordering_per_chunk_list, axis_ratio_per_chunk_list = self._return_weighted_distance_matrix_for_single_estimator_and_scale(distance_matrix_list, to_return_axis_ratio_list=True)
+                weighted_distance_matrix, ordering_per_chunk_list, elongation_per_chunk_list = self._return_weighted_distance_matrix_for_single_estimator_and_scale(distance_matrix_list, to_return_elongation_list=True)
                 # now obtain sequences from the weighted distance matrix
-                ordering_bfs, ordering_dfs, mst_axis_ratio, MST = self._apply_MST_and_return_BFS_DFS_ordering(weighted_distance_matrix, return_axis_ratio=True, return_MST=True)
+                ordering_bfs, ordering_dfs, mst_elongation, MST = self._apply_MST_and_return_BFS_DFS_ordering(weighted_distance_matrix, return_elongation=True, return_MST=True)
 
                 MST_list.append(MST)
-                weight_list.append(mst_axis_ratio)
-                distance_matrix_all += (weighted_distance_matrix * mst_axis_ratio)
-                # add the sequences and their axis ratios into a dictionary
-                self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale_value, "chunks")] = (axis_ratio_per_chunk_list, ordering_per_chunk_list)
-                self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale_value, "weighted")] = (mst_axis_ratio, ordering_bfs)
+                weight_list.append(mst_elongation)
+                distance_matrix_all += (weighted_distance_matrix * mst_elongation)
+                # add the sequences and their elongations into a dictionary
+                self.weighted_elongation_and_sequence_dictionary[(estimator_name, scale_value, "chunks")] = (elongation_per_chunk_list, ordering_per_chunk_list)
+                self.weighted_elongation_and_sequence_dictionary[(estimator_name, scale_value, "weighted")] = (mst_elongation, ordering_bfs)
 
 
-        if self.to_save_axis_ratios:
-            f_axis_ratios = open(self.axis_ratios_outpath, "wb")
-            pickle.dump(self.weighted_axis_ratio_and_sequence_dictionary, f_axis_ratios)
-            f_axis_ratios.close()
+        if self.to_save_elongations:
+            f_elongations = open(self.elongations_outpath, "wb")
+            pickle.dump(self.weighted_elongation_and_sequence_dictionary, f_elongations)
+            f_elongations.close()
             if self.to_print_progress:
-                print("dumped the axis ratios to the file: %s" % self.axis_ratios_outpath)
+                print("dumped the elongations to the file: %s" % self.elongations_outpath)
 
         distance_matrix_all /= numpy.sum(weight_list)
         numpy.fill_diagonal(distance_matrix_all, 0) 
@@ -298,19 +298,19 @@ class Sequencer(object):
             print("dumped the full weighted distance matrix to the file: %s" % self.weighted_distance_matrix_outpath)
 
         ########################################################################################################
-        ######### STEP 3: use the axis ratios of the weighted distance matrices sequences            ###########
+        ######### STEP 3: use the elongations of the weighted distance matrices sequences            ###########
         #########         to build proximity matrices, then convert them to distance matrices,       ###########
         #########         and obtain the final BFS and DFS sequences.                                ###########    
         ######################################################################################################## 
 
         proximity_matrix_sparse = self._return_proximity_matrix_populated_by_MSTs_avg_prox(MST_list, weight_list)
         distance_matrix_sparse = self._convert_proximity_to_distance_matrix(proximity_matrix_sparse)
-        ordering_bfs, ordering_dfs, mst_axis_ratio = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_sparse, return_axis_ratio=True, return_MST=False)
+        ordering_bfs, ordering_dfs, mst_elongation = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_sparse, return_elongation=True, return_MST=False)
 
-        self.final_mst_axis_ratio = mst_axis_ratio
+        self.final_mst_elongation = mst_elongation
         self.final_sequence = ordering_bfs
         ########################################################################################################
-        ######### STEP 4: save the final BFS and DFS sequences, their final axis ratio, and          ###########
+        ######### STEP 4: save the final BFS and DFS sequences, their final elongation, and          ###########
         #########         the sparse distance matrix that was used to obtain these.                  ###########
         ######################################################################################################## 
         f_distance = open(self.sparse_distance_matrix_outpath, "wb")
@@ -321,146 +321,146 @@ class Sequencer(object):
 
         final_sequences_dict = {'BFS': ordering_bfs, 'DFS': ordering_dfs}
         f_final_products = open(self.final_products_outpath, "wb")
-        pickle.dump([mst_axis_ratio, final_sequences_dict], f_final_products)
+        pickle.dump([mst_elongation, final_sequences_dict], f_final_products)
         f_final_products.close()
         if self.to_print_progress:
-            print("dumped the final sequences and axis ratio to the file: %s" % f_final_products)
+            print("dumped the final sequences and elongation to the file: %s" % f_final_products)
 
         # remove the temporary directory and the temporary data if choice_parallelization=True
         if self.to_use_parallelization:
             folder = './joblib_memmap'
             shutil.rmtree(folder)
         
-        return self.final_mst_axis_ratio, self.final_sequence
+        return self.final_mst_elongation, self.final_sequence
 
 
-    def return_axis_ratios_and_sequences_per_chunk(self, estimator_name, scale):
-        """Function returns the intermediate axis ratios and sequences obtained during the calculation of the final sequence.
+    def return_elongations_and_sequences_per_chunk(self, estimator_name, scale):
+        """Function returns the intermediate elongations and sequences obtained during the calculation of the final sequence.
         For each distance metric and scale, the sequencer divided each object into different chunks (parts), and estimated 
-        its corresponding sequence and axis ratio. This funciton returns a list of these axis ratios and sequences.
+        its corresponding sequence and elongation. This funciton returns a list of these elongations and sequences.
 
         Parameters
         ----------
-        :param estimator_name: string, the distance metric for which to return the list of axis ratios and sequences.
+        :param estimator_name: string, the distance metric for which to return the list of elongations and sequences.
 
-        :param scale: integer, the scale for which toe return the list of axis ratios and sequences.
+        :param scale: integer, the scale for which toe return the list of elongations and sequences.
 
 
         Returns
         -------
-        :param axis_ratio_list: a list of float values, the list of axis ratios obtained for each of the chunks for the given 
+        :param elongation_list: a list of float values, the list of elongations obtained for each of the chunks for the given 
             distance metric and scale.
 
         :param sequence_list: a list of lists, the list of sequences calculated for each of the chunks for the given 
             distance metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_elongation_and_sequence_dictionary != None), "the elongation and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
         assert (estimator_name in self.estimator_list), "the required estimator is not included in the esitmator list"
         for i, estimator_value in enumerate(self.estimator_list):
             if estimator_value == estimator_name:
                 scale_list_for_estimator = self.scale_list[i]
                 assert (scale in scale_list_for_estimator), "the required scale is not included in the scale list for the given estimator"
 
-        axis_ratio_list, sequence_list = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale, "chunks")]
+        elongation_list, sequence_list = self.weighted_elongation_and_sequence_dictionary[(estimator_name, scale, "chunks")]
 
-        return axis_ratio_list, sequence_list
+        return elongation_list, sequence_list
 
 
-    def return_axis_ratio_of_weighted_products(self, estimator_name, scale):
-        """Function returns the intermediate axis ratios obtained in the second stage of the code. For each distance metric and
-        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an axis ratio. 
+    def return_elongation_of_weighted_products(self, estimator_name, scale):
+        """Function returns the intermediate elongations obtained in the second stage of the code. For each distance metric and
+        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an elongation. 
 
         Parameters
         ----------
-        :param estimator_name: string, the distance metric for which to return the list of axis ratios and sequences.
+        :param estimator_name: string, the distance metric for which to return the list of elongations and sequences.
 
-        :param scale: integer, the scale for which toe return the list of axis ratios and sequences.
+        :param scale: integer, the scale for which toe return the list of elongations and sequences.
 
 
         Returns
         -------
-        :param axis_ratio: a float, the axis ratio that corresponds to the given metric and scale.
+        :param elongation: a float, the elongation that corresponds to the given metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_elongation_and_sequence_dictionary != None), "the elongation and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
         assert (estimator_name in self.estimator_list), "the required estimator is not included in the esitmator list"
         for i, estimator_value in enumerate(self.estimator_list):
             if estimator_value == estimator_name:
                 scale_list_for_estimator = self.scale_list[i]
                 assert (scale in scale_list_for_estimator), "the required scale is not included in the scale list for the given estimator"   
 
-        axis_ratio, sequence = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale, "weighted")]
+        elongation, sequence = self.weighted_elongation_and_sequence_dictionary[(estimator_name, scale, "weighted")]
 
-        return axis_ratio
+        return elongation
 
 
     def return_sequence_of_weighted_products(self, estimator_name, scale):
         """Function returns the intermediate sequence obtained in the second stage of the code. For each distance metric and
-        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an axis ratio. 
+        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an elongation. 
 
         Parameters
         ----------
-        :param estimator_name: string, the distance metric for which to return the list of axis ratios and sequences.
+        :param estimator_name: string, the distance metric for which to return the list of elongations and sequences.
 
-        :param scale: integer, the scale for which toe return the list of axis ratios and sequences.
+        :param scale: integer, the scale for which toe return the list of elongations and sequences.
 
         Returns
         -------
         :param sequence: a list of integers, the sequence that corresponds to the given metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_elongation_and_sequence_dictionary != None), "the elongation and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
         assert (estimator_name in self.estimator_list), "the required estimator is not included in the esitmator list"
         for i, estimator_value in enumerate(self.estimator_list):
             if estimator_value == estimator_name:
                 scale_list_for_estimator = self.scale_list[i]
                 assert (scale in scale_list_for_estimator), "the required scale is not included in the scale list for the given estimator"   
 
-        axis_ratio, sequence = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_name, scale, "weighted")]
+        elongation, sequence = self.weighted_elongation_and_sequence_dictionary[(estimator_name, scale, "weighted")]
 
         return sequence
 
 
-    def return_axis_ratio_of_weighted_products_all_metrics_and_scales(self):
-        """Function returns the intermediate axis ratios obtained in the second stage of the code. For each distance metric and
-        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an axis ratio. 
-        (*) This function returns a list of axis ratios that corresponds to all the different metrics and scales. 
-        (*) If the user is interested in a particular metric and scale, then one can use the function: return_axis_ratio_of_weighted_products.
+    def return_elongation_of_weighted_products_all_metrics_and_scales(self):
+        """Function returns the intermediate elongations obtained in the second stage of the code. For each distance metric and
+        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an elongation. 
+        (*) This function returns a list of elongations that corresponds to all the different metrics and scales. 
+        (*) If the user is interested in a particular metric and scale, then one can use the function: return_elongation_of_weighted_products.
 
         Returns
         -------
-        :param estimator_list: a list of strings, the distance metrics for which the axis ratios were calculated.
-        :param scale_list: a list of integers, the scales for which the axis ratios were calculated.
-        :param axis_ratio_list: a list of floats, the axis ratios that corresponds to every metric and scale.
+        :param estimator_list: a list of strings, the distance metrics for which the elongations were calculated.
+        :param scale_list: a list of integers, the scales for which the elongations were calculated.
+        :param elongation_list: a list of floats, the elongations that corresponds to every metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_elongation_and_sequence_dictionary != None), "the elongation and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
 
         estimator_list = []
         scale_list = []
-        axis_ratio_list = []
+        elongation_list = []
         for estimator_index, estimator_value in enumerate(self.estimator_list):
             scale_list_for_estimator = self.scale_list[estimator_index]
             for scale_index, scale_value in enumerate(scale_list_for_estimator):
-                axis_ratio, sequence = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_value, scale_value, "weighted")]
+                elongation, sequence = self.weighted_elongation_and_sequence_dictionary[(estimator_value, scale_value, "weighted")]
 
                 estimator_list.append(estimator_value)
                 scale_list.append(scale_value)
-                axis_ratio_list.append(axis_ratio)
+                elongation_list.append(elongation)
 
-        return estimator_list, scale_list, axis_ratio_list
+        return estimator_list, scale_list, elongation_list
 
 
     def return_sequence_of_weighted_products_all_metrics_and_scales(self):
         """Function returns the intermediate sequences obtained in the second stage of the code. For each distance metric and
-        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an axis ratio. 
+        scale, the sequencer estimated the weighted distance matrix, and used it to calculate a sequence and an elongation. 
         (*) This function returns a list of sequences that corresponds to all the different metrics and scales. 
         (*) If the user is interested in a particular metric and scale, then one can use the function: return_sequence_of_weighted_products.
 
         Returns
         -------
-        :param estimator_list: a list of strings, the distance metrics for which the axis ratios were calculated.
-        :param scale_list: a list of integers, the scales for which the axis ratios were calculated.
+        :param estimator_list: a list of strings, the distance metrics for which the elongations were calculated.
+        :param scale_list: a list of integers, the scales for which the elongations were calculated.
         :param sequence_list: a list of lists, the sequences that corresponds to every metric and scale.
         """
-        assert (self.weighted_axis_ratio_and_sequence_dictionary != None), "the axis ratio and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
+        assert (self.weighted_elongation_and_sequence_dictionary != None), "the elongation and sequence dictionary is empty. Are you sure you executed the sequencer using Sequencer.execute first?"
 
         estimator_list = []
         scale_list = []
@@ -468,7 +468,7 @@ class Sequencer(object):
         for estimator_index, estimator_value in enumerate(self.estimator_list):
             scale_list_for_estimator = self.scale_list[estimator_index]
             for scale_index, scale_value in enumerate(scale_list_for_estimator):
-                axis_ratio, sequence = self.weighted_axis_ratio_and_sequence_dictionary[(estimator_value, scale_value, "weighted")]
+                elongation, sequence = self.weighted_elongation_and_sequence_dictionary[(estimator_value, scale_value, "weighted")]
 
                 estimator_list.append(estimator_value)
                 scale_list.append(scale_value)
@@ -694,10 +694,10 @@ class Sequencer(object):
 
 
     ################################################## GRAPH FUNCTIONS ####################################################
-    def _return_MST_axis_ratio(self, distance_arr):
-        """Function estimates the axis ratio of the MST that is described by the given distance array. The input distance 
+    def _return_MST_elongation(self, distance_arr):
+        """Function estimates the elongation of the MST that is described by the given distance array. The input distance 
         array represents the distances of each node in the graph from the root of the graph (the starting point). 
-        Funciton calculates the axis ratio by dividing the half-length of the tree by the half-width.
+        Funciton calculates the elongation by dividing the half-length of the tree by the half-width.
         The half-width is calculated as the average width in every depth level, and the half-length is calculated as the
         average distance from the root.
 
@@ -707,14 +707,14 @@ class Sequencer(object):
 
         Returns
         -------
-        :param mst_axis_ratio: float, the axis ratio of the MST
+        :param mst_elongation: float, the elongation of the MST
         """
         graph_half_length = numpy.average(distance_arr) 
         g_unique, counts = numpy.unique(distance_arr, return_counts=True)
         graph_half_width = numpy.average(counts) / 2.
-        mst_axis_ratio = float(graph_half_length) / float(graph_half_width) + 1 
+        mst_elongation = float(graph_half_length) / float(graph_half_width) + 1 
 
-        return mst_axis_ratio
+        return mst_elongation
 
     def _return_start_index_from_MST(self, graph):
         """Function returns the starting point of the sequence, which is defined as the least central node in the given graph.
@@ -735,19 +735,19 @@ class Sequencer(object):
 
         return start_index
 
-    def _apply_MST_and_return_MST_and_axis_ratio(self, distance_matrix, return_axis_ratio=True):
+    def _apply_MST_and_return_MST_and_elongation(self, distance_matrix, return_elongation=True):
         """Function converts the distance matrix into a fully-conncted graph and calculates its Minimum Spanning Tree (MST).
-        Function has an option to return the axis ratio of the resulting MST. 
+        Function has an option to return the elongation of the resulting MST. 
 
         Parameters
         -------
         :param distance_matrix: numpy.ndarray(), the distance matrix that will be converted into an MST.
-        :param return_axis_ratio: boolean (default=True), whether to return the axis ratio of the resulting MST.
+        :param return_elongation: boolean (default=True), whether to return the elongation of the resulting MST.
 
         Returns
         -------
         :param G: networkx.classes.graph.Graph(), the graph that represents the resulting MST.
-        :param mst_axis_ratio (optional): float, the axis ratio of the resulting MST.
+        :param mst_elongation (optional): float, the elongation of the resulting MST.
         """
         assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
         assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
@@ -759,16 +759,16 @@ class Sequencer(object):
 
         min_span_dist_mat = minimum_spanning_tree(csr_matrix(distance_matrix)).toarray()
         G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
-        if return_axis_ratio:
+        if return_elongation:
             start_index = self._return_start_index_from_MST(G)
             distance_dict = nx.shortest_path_length(G, start_index)
             distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
-            mst_axis_ratio = self._return_MST_axis_ratio(distance_arr)
-            return G, mst_axis_ratio
+            mst_elongation = self._return_MST_elongation(distance_arr)
+            return G, mst_elongation
         else:
             return G
 
-    def _apply_MST_and_return_BFS_DFS_ordering(self, distance_matrix, start_index=None, return_axis_ratio=True, return_MST=True):
+    def _apply_MST_and_return_BFS_DFS_ordering(self, distance_matrix, start_index=None, return_elongation=True, return_MST=True):
         """Function converts the distance matrix into a fully-connected graph and calculates its minimum spanning tree (MST).
         The function also returns two walks within the tree: BFS and DFS. The function also has an option to return the axis 
         ratio of the resulting MST.
@@ -778,14 +778,14 @@ class Sequencer(object):
         :param distance_matrix: numpy.ndarray(), the distance matrix that will be converted into an MST.
         :param start_index: integer (default=None), the index in the matrix from which to start the BFS/DFS walk within the MST. 
             If start_index==None, the function estimates the staring point using the closeness centrality measure.
-        :param return_axis_ratio: boolean (default=True), whether to return the axis ratio of the resulting MST.
+        :param return_elongation: boolean (default=True), whether to return the elongation of the resulting MST.
         :param return MST: boolean (default=True), whether to return the resulting MST.
 
         Returns
         -------
         :param ordering_bfs: a list of integers, a list representing the indices of the nodes according to a BFS walk in the MST
         :param ordering_dfs: a list of integers, a list representing the indices of the nodes according to a DFS walk in the MST
-        :param mst_axis_ratio (optional): float, the axis ratio of the resulting MST.
+        :param mst_elongation (optional): float, the elongation of the resulting MST.
         :param G (optional): networkx.classes.graph.Graph(), the graph that represents the resulting MST.
         """
         assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
@@ -808,12 +808,12 @@ class Sequencer(object):
         distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
         ordering_bfs = distance_inds[numpy.argsort(distance_arr)]
 
-        if return_axis_ratio and return_MST:
-            mst_axis_ratio = self._return_MST_axis_ratio(distance_arr)
-            return ordering_bfs, ordering_dfs, mst_axis_ratio, G
-        elif return_axis_ratio:
-            mst_axis_ratio = self._return_MST_axis_ratio(distance_arr)
-            return ordering_bfs, ordering_dfs, mst_axis_ratio
+        if return_elongation and return_MST:
+            mst_elongation = self._return_MST_elongation(distance_arr)
+            return ordering_bfs, ordering_dfs, mst_elongation, G
+        elif return_elongation:
+            mst_elongation = self._return_MST_elongation(distance_arr)
+            return ordering_bfs, ordering_dfs, mst_elongation
         else:
             return ordering_bfs, ordering_dfs
 
@@ -830,7 +830,7 @@ class Sequencer(object):
         -------
         :param MST_list: list of networkx.classes.graph.Graph(), a list of the MSTs to be populated into the proximity matrix.
         :param weight_list: list of floats, a list of the weights of each of the MST when populated into the proximity matrix.
-            In practice, the weights are defined as the axis ratios of each of the MSTs.
+            In practice, the weights are defined as the elongations of each of the MSTs.
 
         Returns
         -------
@@ -880,7 +880,7 @@ class Sequencer(object):
         -------
         :param MST_list: list of networkx.classes.graph.Graph(), a list of the MSTs to be populated into the proximity matrix.
         :param weight_list: list of floats, a list of the weights of each of the MST when populated into the proximity matrix.
-            In practice, the weights are defined as the axis ratios of each of the MSTs.
+            In practice, the weights are defined as the elongations of each of the MSTs.
 
         Returns
         -------
@@ -1033,23 +1033,23 @@ class Sequencer(object):
                 distance_matrix_dictionary[(estimator_name, scale_value)] = distance_matrix_list
         return distance_matrix_dictionary
 
-    def _return_weighted_distance_matrix_for_single_estimator_and_scale(self, distance_matrix_list, to_return_axis_ratio_list=True, to_return_sequence_list=True):
+    def _return_weighted_distance_matrix_for_single_estimator_and_scale(self, distance_matrix_list, to_return_elongation_list=True, to_return_sequence_list=True):
         """Function calculates the weighted distance matrix for a single metric and scale. 
         Function takes as an input a list of distance matrices, which correspond to the different chunks at a given scale.
-        Function orders the spectra according to each chunk and measures the axis ratio which serves as a weight of each sequence.
-        Function then performs a weighted average to return a single distance matrix, according to the axis ratio.
+        Function orders the spectra according to each chunk and measures the elongation which serves as a weight of each sequence.
+        Function then performs a weighted average to return a single distance matrix, according to the elongation.
 
         Parameters
         -------
         :param distance_matrix_list: list of numpy.ndarray(), a list of distance matrices for each chunk.
-        :param to_return_axis_ratio_list: boolean (default=True), whether to return a list of axis ratios per chunk.
+        :param to_return_elongation_list: boolean (default=True), whether to return a list of elongations per chunk.
         :param to_return_sequence_list: boolean (default=True), whether to return a list of the sequences per chunk.
 
         Returns
         -------
         :param weighted_distance_matrix: numpy.ndarray(), the weighted distance matrix over the different chunks
         :param ordering_list (optional): list of lists, a list that contains the sequences for each different chunk
-        :param axis_ratio_list (optional): list of floats, a list that contains the axis ratios for each different chunk
+        :param elongation_list (optional): list of floats, a list that contains the elongations for each different chunk
         """
         assert type(distance_matrix_list) == list, "distance_matrix_list must be a list"
         for distance_matrix in distance_matrix_list:
@@ -1062,20 +1062,20 @@ class Sequencer(object):
             assert (distance_matrix.round(5) >= 0).all(), "distance matrix contains negative values"
             assert (numpy.diagonal(distance_matrix) == 0).all(), "distance matrix must contain zero values in its diagonal"
 
-        axis_ratio_list = []
+        elongation_list = []
         ordering_list = []
         for chunk_index in range(len(distance_matrix_list)):
             distance_matrix_of_chunk = distance_matrix_list[chunk_index]
-            ordering_bfs, ordering_dfs, mst_axis_ratio, mst = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_of_chunk, return_axis_ratio=True, return_MST=True)
-            axis_ratio_list.append(mst_axis_ratio)
+            ordering_bfs, ordering_dfs, mst_elongation, mst = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_of_chunk, return_elongation=True, return_MST=True)
+            elongation_list.append(mst_elongation)
             ordering_list.append(ordering_bfs)
-        axis_ratio_list = numpy.array(axis_ratio_list)
+        elongation_list = numpy.array(elongation_list)
 
         # now take the weighted average to the list according to the weights you calculated
-        weighted_distance_matrix = numpy.average(distance_matrix_list, axis=0, weights=axis_ratio_list)
-        if to_return_axis_ratio_list and to_return_sequence_list:
-            return weighted_distance_matrix, ordering_list, axis_ratio_list
-        elif to_return_axis_ratio_list and not to_return_sequence_list:
+        weighted_distance_matrix = numpy.average(distance_matrix_list, axis=0, weights=elongation_list)
+        if to_return_elongation_list and to_return_sequence_list:
+            return weighted_distance_matrix, ordering_list, elongation_list
+        elif to_return_elongation_list and not to_return_sequence_list:
             return weighted_distance_matrix, ordering_list
         else:
             return weighted_distance_matrix

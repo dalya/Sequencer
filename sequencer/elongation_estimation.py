@@ -27,10 +27,10 @@ def return_start_index_from_MST(graph):
 
     return start_index
 
-def return_MST_axis_ratio(distance_arr):
-    """Function estimates the axis ratio of the MST that is described by the given distance array. The input distance 
+def return_MST_elongation(distance_arr):
+    """Function estimates the elongation of the MST that is described by the given distance array. The input distance 
     array represents the distances of each node in the graph from the root of the graph (the starting point). 
-    Funciton calculates the axis ratio by dividing the half-length of the tree by the half-width.
+    Funciton calculates the elongation by dividing the half-length of the tree by the half-width.
     The half-width is calculated as the average width in every depth level, and the half-length is calculated as the
     average distance from the root.
 
@@ -40,28 +40,28 @@ def return_MST_axis_ratio(distance_arr):
 
     Returns
     -------
-    :param mst_axis_ratio: float, the axis ratio of the MST
+    :param mst_elongation: float, the elongation of the MST
     """
     graph_half_length = numpy.average(distance_arr) 
     g_unique, counts = numpy.unique(distance_arr, return_counts=True)
     graph_half_width = numpy.average(counts) / 2.
-    mst_axis_ratio = float(graph_half_length) / float(graph_half_width) + 1 
+    mst_elongation = float(graph_half_length) / float(graph_half_width) + 1 
 
-    return mst_axis_ratio
+    return mst_elongation
 
-def apply_MST_and_return_MST_and_axis_ratio(distance_matrix, return_axis_ratio=True):
+def apply_MST_and_return_MST_and_elongation(distance_matrix, return_elongation=True):
     """Function converts the distance matrix into a fully-conncted graph and calculates its Minimum Spanning Tree (MST).
-    Function has an option to return the axis ratio of the resulting MST. 
+    Function has an option to return the elongation of the resulting MST. 
 
     Parameters
     -------
     :param distance_matrix: numpy.ndarray(), the distance matrix that will be converted into an MST.
-    :param return_axis_ratio: boolean (default=True), whether to return the axis ratio of the resulting MST.
+    :param return_elongation: boolean (default=True), whether to return the elongation of the resulting MST.
 
     Returns
     -------
     :param G: networkx.classes.graph.Graph(), the graph that represents the resulting MST.
-    :param mst_axis_ratio (optional): float, the axis ratio of the resulting MST.
+    :param mst_elongation (optional): float, the elongation of the resulting MST.
     """
     assert type(distance_matrix) == numpy.ndarray, "distance matrix must be numpy.ndarray"
     assert len(distance_matrix.shape) == 2, "distance matrix must have 2 dimensions"
@@ -73,11 +73,11 @@ def apply_MST_and_return_MST_and_axis_ratio(distance_matrix, return_axis_ratio=T
 
     min_span_dist_mat = minimum_spanning_tree(csr_matrix(distance_matrix)).toarray()
     G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
-    if return_axis_ratio:
+    if return_elongation:
         start_index = return_start_index_from_MST(G)
         distance_dict = nx.shortest_path_length(G, start_index)
         distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
-        mst_axis_ratio = return_MST_axis_ratio(distance_arr)
-        return G, mst_axis_ratio
+        mst_elongation = return_MST_elongation(distance_arr)
+        return G, mst_elongation
     else:
         return G
