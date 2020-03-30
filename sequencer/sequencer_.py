@@ -806,54 +806,58 @@ class Sequencer(object):
         ordering_bfs = self._return_bfs_walk(G, start_index)
 
         if return_elongation and return_MST:
+            distance_dict = nx.shortest_path_length(G, start_index)
+            distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
             mst_elongation = self._return_MST_elongation(distance_arr)
             return ordering_bfs, ordering_dfs, mst_elongation, G
         elif return_elongation:
+            distance_dict = nx.shortest_path_length(G, start_index)
+            distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
             mst_elongation = self._return_MST_elongation(distance_arr)
             return ordering_bfs, ordering_dfs, mst_elongation
         else:
             return ordering_bfs, ordering_dfs
 
     def _return_bfs_walk(self, G, start_index):
-    """Function returns the BFS walk within the given graph, assuming the given starting index. The difference 
-    between this function and the function in networkx is that this function takes into account the distances between
-    individual nodes when performing the walk. When there is a degeneracy and one can walk to several nodes, the 
-    nodes will be visited according to their distance from their predecessor.
+        """Function returns the BFS walk within the given graph, assuming the given starting index. The difference 
+        between this function and the function in networkx is that this function takes into account the distances between
+        individual nodes when performing the walk. When there is a degeneracy and one can walk to several nodes, the 
+        nodes will be visited according to their distance from their predecessor.
 
-    Parameters
-    -------
-    :param G: networkx.classes.graph.Graph(), the graph that represents the resulting MST.
-    :param start_index: integer (default=None), the index in the matrix from which to start the walk within the MST. 
-    
-    Returns
-    -------
-    :param ordering_bfs: a list of integers, a list representing the indices of the nodes according to a BFS walk in the MST
-    """
-    distance_dict = nx.shortest_path_length(G, start_index)
-    bfs_pred = dict(nx.bfs_predecessors(G, start_index))
+        Parameters
+        -------
+        :param G: networkx.classes.graph.Graph(), the graph that represents the resulting MST.
+        :param start_index: integer (default=None), the index in the matrix from which to start the walk within the MST. 
 
-    distance_inds = numpy.fromiter(distance_dict.keys(), dtype=int)
-    distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
+        Returns
+        -------
+        :param ordering_bfs: a list of integers, a list representing the indices of the nodes according to a BFS walk in the MST
+        """
+        distance_dict = nx.shortest_path_length(G, start_index)
+        bfs_pred = dict(nx.bfs_predecessors(G, start_index))
 
-    ordering_bfs = []
-    distance_arr_unique = numpy.unique(distance_arr)
-    for dist_val in distance_arr_unique:
-        distance_inds_small = numpy.array(distance_inds[distance_arr == dist_val])
-        # no degeneracy - a single node ahead
-        if len(distance_inds_small) == 1:
-            ordering_bfs.append(distance_inds_small[0])
-        # degeneracy - several nodes, need to order them according to distance
-        else:
-            distance_arr_small = []
-            for curr_ind in distance_inds_small:
-                prev_ind = bfs_pred[curr_ind]
-                distance_arr_small.append(G[prev_ind][curr_ind]['weight'])
-            distance_arr_small = numpy.array(distance_arr_small)
-            inds_ordered = distance_inds_small[numpy.argsort(distance_arr_small)]
-            ordering_bfs += list(inds_ordered)
+        distance_inds = numpy.fromiter(distance_dict.keys(), dtype=int)
+        distance_arr = numpy.fromiter(distance_dict.values(), dtype=int)
 
-    ordering_bfs = numpy.array(ordering_bfs).astype(numpy.int)
-    return ordering_bfs
+        ordering_bfs = []
+        distance_arr_unique = numpy.unique(distance_arr)
+        for dist_val in distance_arr_unique:
+            distance_inds_small = numpy.array(distance_inds[distance_arr == dist_val])
+            # no degeneracy - a single node ahead
+            if len(distance_inds_small) == 1:
+                ordering_bfs.append(distance_inds_small[0])
+            # degeneracy - several nodes, need to order them according to distance
+            else:
+                distance_arr_small = []
+                for curr_ind in distance_inds_small:
+                    prev_ind = bfs_pred[curr_ind]
+                    distance_arr_small.append(G[prev_ind][curr_ind]['weight'])
+                distance_arr_small = numpy.array(distance_arr_small)
+                inds_ordered = distance_inds_small[numpy.argsort(distance_arr_small)]
+                ordering_bfs += list(inds_ordered)
+
+        ordering_bfs = numpy.array(ordering_bfs).astype(numpy.int)
+        return ordering_bfs
 
 
     ######################################## PROXIMIY/DISTANCE matrix conversion ##########################################
