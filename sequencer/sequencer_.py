@@ -109,6 +109,9 @@ class Sequencer(object):
 
         # set to None the parameters that are calculated during the execute function
         self.weighted_elongation_and_sequence_dictionary = None
+        self.final_mst_elongation = None
+        self.final_mst = None
+        self.final_sequence = None
 
 
     def execute(self, outpath, to_print_progress=True, to_calculate_distance_matrices=True, to_save_distance_matrices=True, \
@@ -305,9 +308,10 @@ class Sequencer(object):
 
         proximity_matrix_sparse = self._return_proximity_matrix_populated_by_MSTs_avg_prox(MST_list, weight_list)
         distance_matrix_sparse = self._convert_proximity_to_distance_matrix(proximity_matrix_sparse)
-        ordering_bfs, ordering_dfs, mst_elongation = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_sparse, return_elongation=True, return_MST=False)
+        ordering_bfs, ordering_dfs, mst_elongation, mst = self._apply_MST_and_return_BFS_DFS_ordering(distance_matrix_sparse, return_elongation=True, return_MST=True)
 
         self.final_mst_elongation = mst_elongation
+        self.final_mst = mst
         self.final_sequence = ordering_bfs
         ########################################################################################################
         ######### STEP 4: save the final BFS and DFS sequences, their final elongation, and          ###########
@@ -321,7 +325,7 @@ class Sequencer(object):
 
         final_sequences_dict = {'BFS': ordering_bfs, 'DFS': ordering_dfs}
         f_final_products = open(self.final_products_outpath, "wb")
-        pickle.dump([mst_elongation, final_sequences_dict], f_final_products)
+        pickle.dump([mst_elongation, mst, final_sequences_dict], f_final_products)
         f_final_products.close()
         if self.to_print_progress:
             print("dumped the final sequences and elongation to the file: %s" % f_final_products)
@@ -332,6 +336,40 @@ class Sequencer(object):
             shutil.rmtree(folder)
         
         return self.final_mst_elongation, self.final_sequence
+
+    def return_final_MST_elongation(self):
+        """Function returns the elongation of the final minimum spanning tree obtained after running the sequencer.
+        This elongation serves as a figure of merit of the resulting sequence.
+        
+        Returns
+        -------
+        :param elongation: float, the elongation of the final minimum spanning tree.
+        """
+        assert (self.final_mst_elongation != None), "the elongation of the MST is not defined. Are you sure you executed the sequencer using Sequencer.execute first?" 
+        return self.final_mst_elongation
+
+    def return_final_sequence(self):
+        """Function returns the final sequence obtained after running the sequencer. 
+        The sequence is a list containing the input indices, ordered according to the detected sequence. 
+        That is, if the list is: seq = [15, 64, 89, 3, ..], then the object at index 15 in the original data 
+        is the first in the sequence, the object at index 64 is the second in the sequence, and so on.
+        
+        Returns
+        -------
+        :param sequence: list of integers, the ordered indices of the input dataset according to the detected sequence.
+        """
+        assert (self.final_sequence != None), "the final sequence is not defined. Are you sure you executed the sequencer using Sequencer.execute first?" 
+        return self.final_sequence
+
+    def return_final_MST(self):
+        """Function returns the final minimum spanning tree obtained after running the sequencer.
+        
+        Returns
+        -------
+        :param G: networkx.classes.graph.Graph(), the graph that represents the resulting MST.
+        """
+        assert (self.final_mst != None), "the final MST is not defined. Are you sure you executed the sequencer using Sequencer.execute first?" 
+        return self.final_mst        
 
 
     def return_elongations_and_sequences_per_chunk(self, estimator_name, scale):
