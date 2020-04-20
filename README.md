@@ -133,4 +133,4 @@ The following figure shows an example of a simulated dataset with a clear one-di
 We construct the simulated dataset and compare the Sequencer output to the one-dimensional embedding by tSNE and UMAP in the Jupyter notebook `comparison_with_tsne_and_umap.ipynb` in the examples directory. In addition, we show there how to define a general figure of merit for the one-dimensional embedding of any Dimensionality Reduction algorithm, using the graph elongation. We show how this figure of merit can be used to optimize the hyper-parameters of algorithms such as tSNE and UMAP, and thus select the "best" one-dimensional embedding.
 
 ## Citation 
-XXX remains to be written
+The repository contains the draft of the paper that describes the Sequencer. The paper will be submitted to a journal and uploaded to the Arxiv soon. Please cite the paper if you use the Sequencer in your research :)
