@@ -116,7 +116,7 @@ class Sequencer(object):
 
     def execute(self, outpath, to_print_progress=True, to_calculate_distance_matrices=True, to_save_distance_matrices=True, \
         distance_matrices_inpath=None, to_save_elongations=True, to_average_N_best_estimators=False, number_of_best_estimators=None, \
-        to_use_parallelization=False):
+        to_use_parallelization=False, num_cores = None):
         """Main function of the sequencer that applies the algorithm to the data, and returns the best sequence and its elongation.
         (*) The function can save many intermediate products, such as the distance matrices for each estimator and scale. The user is 
         encoraged to save these products, since they can be used later to reduce dramatically the computation time. 
@@ -215,12 +215,17 @@ class Sequencer(object):
         self.to_average_N_best_estimators = to_average_N_best_estimators
         self.number_of_best_estimators = number_of_best_estimators
         self.to_use_parallelization = to_use_parallelization
+        self.num_cores = num_cores
 
         ########################################################################################################
         ######### Parallelization                                                                    ###########
         ######################################################################################################## 
         if self.to_use_parallelization:
-            num_cores = multiprocessing.cpu_count()
+            
+            if self.num_cores is None:
+                num_cores = multiprocessing.cpu_count()
+            else:
+                num_cores = self.num_cores
             if self.to_print_progress:
                 print("Parallelization is ON. Number of cores:", num_cores)
 
