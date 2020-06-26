@@ -136,6 +136,7 @@ We construct the simulated dataset and compare the Sequencer output to the one-d
 If you make use of the code in this directory, the Sequencer algorithm, or the ideas presented in the paper (e.g., using the MST elongation to optimize the hyper-parameters of tSNE and UMAP), please cite our paper on Arxiv: https://arxiv.org/abs/2006.13948.
 
 Citation key:
+```
 @misc{baron2020extracting,
     title={Extracting the main trend in a dataset: the Sequencer algorithm},
     author={Dalya Baron and Brice Ménard},
@@ -144,4 +145,4 @@ Citation key:
     archivePrefix={arXiv},
     primaryClass={cs.LG}
 }
-
+```
