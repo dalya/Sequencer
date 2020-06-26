@@ -143,6 +143,7 @@ Citation key:
     year={2020},
     eprint={2006.13948},
     archivePrefix={arXiv},
-    primaryClass={cs.LG}
+    primaryClass={cs.LG},
+    year=2020
 }
 ```
