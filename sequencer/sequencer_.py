@@ -74,7 +74,7 @@ class Sequencer(object):
             assert ((grid.shape[0] == objects_list.shape[1]) and (grid.shape[1] == objects_list.shape[2])), "the grid and the objects must have the same dimensions"
 
         if scale_list != None:
-            assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
+            assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64 or type(scale_value) == numpy.int32) for scale_value in numpy.array(scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
         assert numpy.fromiter([estimator_value in ['EMD', 'energy', 'KL', 'L2'] for estimator_value in estimator_list], dtype=bool).all(), "estimators must be EMD, energy, KL or L2"
         if scale_list != None:
             assert len(scale_list) == len(estimator_list), "the length of scale_list must equal to the length of estimator_list"
@@ -176,8 +176,8 @@ class Sequencer(object):
             assert (self.grid.shape[0] == self.objects_list.shape[1]), "the grid and the objects must have the same dimensions"
         if len(self.grid.shape) == 2:
             assert ((self.grid.shape[0] == self.objects_list.shape[1]) and (self.grid.shape[1] == self.objects_list.shape[2])), "the grid and the objects must have the same dimensions"
-
-        assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(self.scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
+        print(type(x) for x in numpy.array(self.scale_list).flatten())
+        assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64 or type(scale_value) == numpy.int32) for scale_value in numpy.array(self.scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
         assert numpy.fromiter([estimator_value in ['EMD', 'energy', 'KL', 'L2'] for estimator_value in self.estimator_list], dtype=bool).all(), "estimators must be EMD, energy, KL or L2"
         if len(self.grid.shape) == 2:
             assert ('EMD' not in self.estimator_list), "EMD cannot be applied to two-dimensional objects"
@@ -1080,7 +1080,7 @@ class Sequencer(object):
             assert (self.grid.shape[0] == self.objects_list.shape[1]), "the grid and the objects must have the same dimensions"
         if len(self.grid.shape) == 2:
             assert ((self.grid.shape[0] == self.objects_list.shape[1]) and (self.grid.shape[1] == self.objects_list.shape[2])), "the grid and the objects must have the same dimensions"
-        assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64) for scale_value in numpy.array(self.scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
+        assert numpy.fromiter([(isinstance(scale_value, int) or type(scale_value) == numpy.int64 or type(scale_value) == numpy.int32) for scale_value in numpy.array(self.scale_list).flatten()], dtype=bool).all(), "scale values must all be integers"
         assert numpy.fromiter([estimator_value in ['EMD', 'energy', 'KL', 'L2'] for estimator_value in self.estimator_list], dtype=bool).all(), "estimators must be EMD, energy, KL or L2"
 
         distance_matrix_dictionary = {}
