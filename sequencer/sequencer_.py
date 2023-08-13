@@ -58,8 +58,10 @@ class Sequencer(object):
                        that the minimal length of a part is 20 pixels. For example, if the length of the objects is 100,
                        then the default scales will be: 1, 2, 4. If the length of the objects is 1000, then the default
                        scales will be: 1, 2, 4, 8, 16, 32. For 2D objects, the set of default scales is [1, 1].
+    :param no_norm: boolean (default=False), whether to normalize the objects before calculating the distance matrices.
     """
-    def __init__(self, grid, objects_list, estimator_list, scale_list=None):
+    def __init__(self, grid, objects_list, estimator_list, scale_list=None,
+                 no_norm:bool=False):
         assert ((len(grid.shape) == 1) or (len(grid.shape) == 2)), "objects can be one- or two-dimensional"
         assert (~numpy.isnan(grid)).all(), "grid cannot contain nan values"
         assert (~numpy.isinf(grid)).all(), "grid cannot contain infinite values"
@@ -89,6 +91,7 @@ class Sequencer(object):
         self.grid = grid
         self.objects_list = objects_list
         self.estimator_list = estimator_list
+        self.no_norm = no_norm
         if scale_list != None:
             self.scale_list = scale_list
         else:
@@ -670,6 +673,10 @@ class Sequencer(object):
         objects_list_split = numpy.array_split(objects_list, N_chunks, axis=-1)
         objects_list_split_normalised = []
         for objects_list_chunk in objects_list_split:
+            if self.no_norm:
+                objects_list_split_normalised.append(objects_list_chunk)
+                continue   
+            # Normzlize
             sum_vec = numpy.sum(objects_list_chunk, axis=-1)
             for sum_val in sum_vec:
                 assert (sum_val > 0), "during the splitting into chunks, a chunk resulted in a negative or zero sum, which means that the chunk cannot be normalized. The user should consider adding an offset to all the objects"
@@ -703,6 +710,7 @@ class Sequencer(object):
         objects_list_split_1 = numpy.array_split(objects_list, N_chunks[0], axis=1)
         for objects_list_split_tmp in objects_list_split_1:
             objects_list_split_2 = numpy.array_split(objects_list_split_tmp, N_chunks[1], axis=2)
+            # JXP -- modify this!
             for objects_list_split in objects_list_split_2:
                 sum_vec = numpy.sum(objects_list_split, axis=(1,2))
                 for sum_val in sum_vec:
@@ -801,7 +809,8 @@ class Sequencer(object):
         assert (distance_matrix.diagonal() == 0).all(), "distance matrix must contain zeros in its diagonal"
 
         min_span_dist_mat = minimum_spanning_tree(csr_matrix(distance_matrix)).toarray()
-        G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
+        #G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
+        G = nx.from_scipy_sparse_array(minimum_spanning_tree(csr_matrix(distance_matrix)))
         if return_elongation:
             start_index = self._return_start_index_from_MST(G)
             distance_dict = nx.shortest_path_length(G, start_index)
@@ -840,7 +849,8 @@ class Sequencer(object):
         assert (distance_matrix.diagonal() == 0).all(), "distance matrix must contain zeros in its diagonal"
 
         min_span_dist_mat = minimum_spanning_tree(csr_matrix(distance_matrix)).toarray()
-        G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
+        #G = nx.from_scipy_sparse_matrix(minimum_spanning_tree(csr_matrix(distance_matrix)))
+        G = nx.from_scipy_sparse_array(minimum_spanning_tree(csr_matrix(distance_matrix)))
         if start_index == None:
             start_index = self._return_start_index_from_MST(G)
         # DFS walk
