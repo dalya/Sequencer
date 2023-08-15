@@ -909,7 +909,7 @@ class Sequencer(object):
                 inds_ordered = distance_inds_small[numpy.argsort(distance_arr_small)]
                 ordering_bfs += list(inds_ordered)
 
-        ordering_bfs = numpy.array(ordering_bfs).astype(numpy.int)
+        ordering_bfs = numpy.array(ordering_bfs).astype(int)
         return ordering_bfs
 
 
