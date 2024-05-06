@@ -29,7 +29,27 @@ To run the Jupyter notebooks in the examples directory, and to compare the Seque
 
 ## How to install the Sequencer 
 
-### Using PyPI:
+### Manual installation through GitHub:
+For a manual installation:
+```
+wget https://github.com/dalya/Sequencer/archive/master.zip
+unzip master.zip
+rm master.zip
+cd Sequencer-master/
+```
+Install the requirements:
+```
+sudo pip install -r requirements.txt
+```
+Install the package:
+```
+python setup.py install
+```
+
+### Using PyPI: 
+The PyPI version of the code is not up to date and includes several deprecated functions, resulting in running errors when installed from pip. Please install from GitHub for now, and hopefully I will find time to update the PyPI soon :)
+
+<!-- ### Using PyPI: 
 Assuming you have installed numpy, scipy, and networkx, then using PyPI install:
 ```
 pip install TheSequencer
@@ -48,24 +68,7 @@ conda install matplotlib
 conda install scikit-learn
 conda install -c conda-forge umap-learn
 pip install TheSequencer
-```
-
-### Manual installation:
-For a manual installation:
-```
-wget https://github.com/dalya/Sequencer/archive/master.zip
-unzip master.zip
-rm master.zip
-cd Sequencer-master/
-```
-Install the requirements:
-```
-sudo pip install -r requirements.txt
-```
-Install the package:
-```
-python setup.py install
-```
+``` -->
 
 ## How to use the Sequencer
 The examples directory consists of several Jupyter notebooks showing how to use the Sequencer. New users are encoraged to start with the notebook `basic_sequencer_functionalities.ipynb`, which explains the basic functionalities of the Sequencer.
